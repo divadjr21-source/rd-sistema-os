@@ -5,10 +5,17 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
-import { createOrder, getCompany } from "@/services/storage";
+import { createOrder, getCompany, uploadMediaFiles } from "@/services/storage";
 import { formatPhone, stripPhone, whatsappLink } from "@/lib/utils";
 import { Camera, Upload, CheckCircle, Phone, MapPin, User, FileText } from "lucide-react";
 import Link from "next/link";
+
+type MediaFile = {
+  file: File;
+  preview: string;
+  type: "image" | "video";
+  name: string;
+};
 
 export default function ChamadoPage() {
   const [form, setForm] = useState({
@@ -17,7 +24,7 @@ export default function ChamadoPage() {
     address: "",
     description: "",
   });
-  const [files, setFiles] = useState<{ url: string; type: "image" | "video"; name: string }[]>([]);
+  const [files, setFiles] = useState<MediaFile[]>([]);
   const [submitted, setSubmitted] = useState(false);
   const [osNumber, setOsNumber] = useState("");
   const [whatsappUrl, setWhatsappUrl] = useState("");
@@ -32,14 +39,18 @@ export default function ChamadoPage() {
   const handleFile = (e: ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files) return;
     Array.from(e.target.files).forEach((file) => {
-      const url = URL.createObjectURL(file);
+      const preview = URL.createObjectURL(file);
       const type = file.type.startsWith("video") ? "video" : "image";
-      setFiles((prev) => [...prev, { url, type, name: file.name }]);
+      setFiles((prev) => [...prev, { file, preview, type, name: file.name }]);
     });
   };
 
   const removeFile = (idx: number) => {
-    setFiles((prev) => prev.filter((_, i) => i !== idx));
+    setFiles((prev) => {
+      const removed = prev[idx];
+      if (removed) URL.revokeObjectURL(removed.preview);
+      return prev.filter((_, i) => i !== idx);
+    });
   };
 
   const handleSubmit = async (e: FormEvent) => {
@@ -47,17 +58,34 @@ export default function ChamadoPage() {
     if (!form.fullName || !form.phone || !form.address || !form.description || submitting) return;
     setSubmitting(true);
     try {
-      const order = await createOrder({
+      // Cria a ordem primeiro para obter o ID
+      const draftOrder = await createOrder({
         client: {
           fullName: form.fullName,
           phone: stripPhone(form.phone),
           address: form.address,
         },
         description: form.description,
-        media: files,
+        media: [],
       });
+
+      // Faz upload das mídias para o Storage
+      const media = files.length > 0 ? await uploadMediaFiles(draftOrder.id, files) : [];
+
+      // Atualiza a ordem com as mídias
+      const { createClient } = await import("@/lib/supabase/client");
+      const supabase = createClient();
+      if (media.length > 0) {
+        const { error } = await supabase
+          .from("order_media")
+          .insert(media.map((m) => ({ order_id: draftOrder.id, url: m.url, type: m.type, name: m.name })));
+        if (error) throw error;
+      }
+
+      const order = { ...draftOrder, media };
+
       setOsNumber(order.number);
-      const text = `*Novo Chamado - RD Solutions*\n\n*OS:* ${order.number}\n*Cliente:* ${form.fullName}\n*Telefone:* ${form.phone}\n*Endereço:* ${form.address}\n\n*Problema:*\n${form.description}\n\n${files.length > 0 ? `*Mídias:* ${files.map((f) => f.url).join("\n")}` : ""}\n\n_Acesse o painel: ${process.env.NEXT_PUBLIC_PANEL_URL || "https://app.meusistema.com/painel"}_`;
+      const text = `*Novo Chamado - RD Solutions*\n\n*OS:* ${order.number}\n*Cliente:* ${form.fullName}\n*Telefone:* ${form.phone}\n*Endereço:* ${form.address}\n\n*Problema:*\n${form.description}\n\n${media.length > 0 ? `*Mídias:* ${media.map((f) => f.url).join("\n")}` : ""}\n\n_Acesse o painel: ${process.env.NEXT_PUBLIC_PANEL_URL || "https://app.meusistema.com/painel"}_`;
       const company = await getCompany();
       setWhatsappUrl(whatsappLink(company.whatsapp || "31999999999", text));
       setSubmitted(true);
@@ -213,9 +241,9 @@ export default function ChamadoPage() {
                       {files.map((file, idx) => (
                         <div key={idx} className="relative aspect-square rounded-xl overflow-hidden bg-graphite-950 border border-graphite-800">
                           {file.type === "video" ? (
-                            <video src={file.url} className="w-full h-full object-cover" />
+                            <video src={file.preview} className="w-full h-full object-cover" />
                           ) : (
-                            <img src={file.url} alt="" className="w-full h-full object-cover" />
+                            <img src={file.preview} alt="" className="w-full h-full object-cover" />
                           )}
                           <button
                             type="button"

@@ -162,7 +162,24 @@ CREATE TRIGGER trg_calculate_budget_item_total
   FOR EACH ROW
   EXECUTE FUNCTION public.calculate_budget_item_total();
 
--- Atualiza status da O.S. quando orçamento é aprovado/recusado
+-- 7. Bucket de storage para mídias (pasta privada com acesso público de leitura)
+INSERT INTO storage.buckets (id, name, public, avif_autodetection, file_size_limit, allowed_mime_types)
+VALUES ('order-media', 'order-media', true, false, 52428800, ARRAY['image/*','video/*'])
+ON CONFLICT (id) DO UPDATE SET public = true, file_size_limit = 52428800, allowed_mime_types = ARRAY['image/*','video/*'];
+
+-- Políticas do bucket order-media
+CREATE POLICY "Allow authenticated uploads to order-media"
+  ON storage.objects FOR INSERT TO authenticated
+  WITH CHECK (bucket_id = 'order-media');
+
+CREATE POLICY "Allow authenticated delete own order-media"
+  ON storage.objects FOR DELETE TO authenticated
+  USING (bucket_id = 'order-media');
+
+CREATE POLICY "Allow public read order-media"
+  ON storage.objects FOR SELECT TO anon, authenticated
+  USING (bucket_id = 'order-media');
+
 CREATE OR REPLACE FUNCTION public.sync_order_status_from_budget()
 RETURNS trigger AS $$
 BEGIN

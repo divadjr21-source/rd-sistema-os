@@ -273,6 +273,35 @@ export async function getOrderById(id: string): Promise<OrderService | undefined
   return data ? mapOrder(data) : undefined;
 }
 
+export async function uploadMediaFiles(
+  orderId: string,
+  files: { file: File; type: "image" | "video"; name: string }[]
+): Promise<{ url: string; type: "image" | "video"; name: string }[]> {
+  if (files.length === 0) return [];
+
+  const uploaded: { url: string; type: "image" | "video"; name: string }[] = [];
+
+  for (const { file, type, name } of files) {
+    const ext = file.name.split(".").pop() || (type === "video" ? "mp4" : "jpg");
+    const path = `${orderId}/${Date.now()}-${Math.random().toString(36).slice(2, 9)}.${ext}`;
+
+    const { error } = await supabase.storage.from("order-media").upload(path, file, {
+      cacheControl: "3600",
+      upsert: false,
+    });
+
+    if (error) throw error;
+
+    const {
+      data: { publicUrl },
+    } = supabase.storage.from("order-media").getPublicUrl(path);
+
+    uploaded.push({ url: publicUrl, type, name });
+  }
+
+  return uploaded;
+}
+
 export async function createOrder(data: {
   client: Omit<Client, "id" | "createdAt">;
   description: string;

@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { getOrders, getClients, createOrderManual, deleteOrder } from "@/services/storage";
+import { getOrders, getClients, createOrderManual, deleteOrder, uploadMediaFiles } from "@/services/storage";
 import { OrderService, Client, OrderStatus } from "@/types";
 import { formatPhone, formatPhoneInput, statusLabels, statusColors } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
@@ -56,7 +56,7 @@ export default function OrdersListPage() {
     description: "",
     status: "pendente" as OrderStatus,
   });
-  const [files, setFiles] = useState<{ url: string; type: "image" | "video"; name: string }[]>([]);
+  const [files, setFiles] = useState<{ file: File; preview: string; type: "image" | "video"; name: string }[]>([]);
 
   useEffect(() => {
     refresh();
@@ -90,14 +90,18 @@ export default function OrdersListPage() {
   const handleFile = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files) return;
     Array.from(e.target.files).forEach((file) => {
-      const url = URL.createObjectURL(file);
+      const preview = URL.createObjectURL(file);
       const type = file.type.startsWith("video") ? "video" : "image";
-      setFiles((prev) => [...prev, { url, type, name: file.name }]);
+      setFiles((prev) => [...prev, { file, preview, type, name: file.name }]);
     });
   };
 
   const removeFile = (idx: number) => {
-    setFiles((prev) => prev.filter((_, i) => i !== idx));
+    setFiles((prev) => {
+      const removed = prev[idx];
+      if (removed) URL.revokeObjectURL(removed.preview);
+      return prev.filter((_, i) => i !== idx);
+    });
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -123,12 +127,23 @@ export default function OrdersListPage() {
 
     setSubmitting(true);
     try {
-      await createOrderManual({
+      const order = await createOrderManual({
         client: clientData,
         description: form.description,
         status: form.status,
-        media: files,
+        media: [],
       });
+
+      const media = files.length > 0 ? await uploadMediaFiles(order.id, files) : [];
+      if (media.length > 0) {
+        const { createClient } = await import("@/lib/supabase/client");
+        const supabase = createClient();
+        const { error } = await supabase
+          .from("order_media")
+          .insert(media.map((m) => ({ order_id: order.id, url: m.url, type: m.type, name: m.name })));
+        if (error) throw error;
+      }
+
       await refresh();
       setModalOpen(false);
       resetForm();
@@ -291,9 +306,9 @@ export default function OrdersListPage() {
                     {files.map((f, idx) => (
                       <div key={idx} className="relative w-16 h-16 rounded-lg overflow-hidden bg-graphite-950 border border-graphite-800">
                         {f.type === "video" ? (
-                          <video src={f.url} className="w-full h-full object-cover" />
+                          <video src={f.preview} className="w-full h-full object-cover" />
                         ) : (
-                          <img src={f.url} alt="" className="w-full h-full object-cover" />
+                          <img src={f.preview} alt="" className="w-full h-full object-cover" />
                         )}
                         <button
                           type="button"
