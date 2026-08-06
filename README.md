@@ -1,36 +1,70 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# RD Solutions - Sistema de Ordem de Serviço
 
-## Getting Started
+Sistema de gestão de ordens de serviço para técnicos de CFTV, elétrica, segurança eletrônica e telecomunicações.
 
-First, run the development server:
+## Tecnologias
+
+- [Next.js 14](https://nextjs.org)
+- [React 18](https://react.dev)
+- [TypeScript](https://www.typescriptlang.org)
+- [Tailwind CSS](https://tailwindcss.com)
+- [Supabase](https://supabase.com) (banco de dados + autenticação)
+- [Vercel](https://vercel.com) (hospedagem)
+
+## Variáveis de ambiente
+
+Copie o arquivo `.env.example` para `.env.local` e preencha com os dados do seu projeto Supabase:
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+cp .env.example .env.local
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+```env
+NEXT_PUBLIC_SUPABASE_URL=https://SEU_PROJETO.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=SUA_ANON_KEY
+NEXT_PUBLIC_APP_URL=http://localhost:3000
+NEXT_PUBLIC_PANEL_URL=https://app.meusistema.com/painel
+```
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Rodando localmente
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```bash
+npm install
+npm run dev
+```
 
-## Learn More
+Acesse [http://localhost:3000](http://localhost:3000).
 
-To learn more about Next.js, take a look at the following resources:
+## Configurando o Supabase
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+1. Crie um novo projeto em [supabase.com](https://supabase.com).
+2. No **SQL Editor**, execute o conteúdo de `supabase/migrations/20260803000001_init.sql`.
+3. Vá em **Project Settings > API** e copie a **URL** e a **anon key** para o `.env.local`.
+4. Crie um usuário técnico em **Authentication > Users > Add user** (ou execute o `20260803000002_seed_user.sql` ajustando a senha).
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Deploy na Vercel
 
-## Deploy on Vercel
+1. Faça commit e push para um repositório no GitHub.
+2. Acesse [vercel.com](https://vercel.com) e clique em **Add New Project**.
+3. Importe o repositório do GitHub.
+4. Em **Environment Variables**, adicione:
+   - `NEXT_PUBLIC_SUPABASE_URL`
+   - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+   - `NEXT_PUBLIC_PANEL_URL` (URL do painel em produção, ex: `https://rd-solutions.vercel.app/painel`)
+5. Clique em **Deploy**.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## Estrutura do projeto
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- `src/app/` - páginas da aplicação
+- `src/services/storage.ts` - camada de acesso ao Supabase
+- `src/lib/supabase/` - clientes Supabase para browser e servidor
+- `src/middleware.ts` - proteção de rotas autenticadas
+- `supabase/migrations/` - scripts SQL do banco de dados
+
+## Autenticação
+
+O painel (`/painel/*`) é protegido pelo middleware e exige login. O login usa a autenticação nativa do Supabase Auth. A página pública `/chamado` e a página de orçamento `/orcamento/[id]` não exigem autenticação.
+
+## Licença
+
+MIT
