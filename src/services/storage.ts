@@ -273,6 +273,54 @@ export async function getOrderById(id: string): Promise<OrderService | undefined
   return data ? mapOrder(data) : undefined;
 }
 
+export async function trackOrder(query: string): Promise<{
+  order: OrderService | null;
+  history: { id: string; status: string; note: string | null; createdAt: string }[];
+}> {
+  const trimmed = query.trim();
+  if (!trimmed) return { order: null, history: [] };
+
+  let orderQuery = supabase
+    .from("orders")
+    .select(
+      `
+      *,
+      clients(*),
+      order_media(*),
+      budget_items(*)
+    `
+    );
+
+  if (/^[0-9a-fA-F-]{36}$/.test(trimmed)) {
+    orderQuery = orderQuery.eq("id", trimmed);
+  } else {
+    orderQuery = orderQuery.eq("number", trimmed);
+  }
+
+  const { data, error } = await orderQuery.maybeSingle();
+  if (error) throw error;
+  if (!data) return { order: null, history: [] };
+
+  const order = mapOrder(data);
+
+  const { data: historyRows, error: historyError } = await supabase
+    .from("order_status_history")
+    .select("*")
+    .eq("order_id", order.id)
+    .order("created_at", { ascending: false });
+
+  if (historyError) throw historyError;
+
+  const history = (historyRows || []).map((h) => ({
+    id: h.id,
+    status: h.status,
+    note: h.note,
+    createdAt: h.created_at,
+  }));
+
+  return { order, history };
+}
+
 export async function uploadMediaFiles(
   orderId: string,
   files: { file: File; type: "image" | "video"; name: string }[]

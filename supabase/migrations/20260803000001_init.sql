@@ -162,10 +162,75 @@ CREATE TRIGGER trg_calculate_budget_item_total
   FOR EACH ROW
   EXECUTE FUNCTION public.calculate_budget_item_total();
 
--- 7. Bucket de storage para mídias (pasta privada com acesso público de leitura)
+-- 7. Tabela de histórico de status/notas do técnico
+CREATE TABLE IF NOT EXISTS public.order_status_history (
+  id uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
+  order_id uuid NOT NULL REFERENCES public.orders(id) ON DELETE CASCADE,
+  status text NOT NULL,
+  note text,
+  created_at timestamptz DEFAULT now()
+);
+
+-- 8. Bucket de storage para mídias (pasta privada com acesso público de leitura)
 INSERT INTO storage.buckets (id, name, public, avif_autodetection, file_size_limit, allowed_mime_types)
 VALUES ('order-media', 'order-media', true, false, 52428800, ARRAY['image/*','video/*'])
 ON CONFLICT (id) DO UPDATE SET public = true, file_size_limit = 52428800, allowed_mime_types = ARRAY['image/*','video/*'];
+
+-- Políticas do bucket order-media
+CREATE POLICY "Allow authenticated uploads to order-media"
+  ON storage.objects FOR INSERT TO authenticated
+  WITH CHECK (bucket_id = 'order-media');
+
+CREATE POLICY "Allow authenticated delete own order-media"
+  ON storage.objects FOR DELETE TO authenticated
+  USING (bucket_id = 'order-media');
+
+CREATE POLICY "Allow public read order-media"
+  ON storage.objects FOR SELECT TO anon, authenticated
+  USING (bucket_id = 'order-media');
+
+-- RLS para histórico de status
+ALTER TABLE public.order_status_history ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Allow authenticated manage order_status_history"
+  ON public.order_status_history FOR ALL TO authenticated USING (true) WITH CHECK (true);
+
+CREATE POLICY "Allow anon read order_status_history"
+  ON public.order_status_history FOR SELECT TO anon USING (true);
+
+-- Trigger para registrar histórico ao mudar status da O.S.
+CREATE OR REPLACE FUNCTION public.log_order_status_change()
+RETURNS trigger AS $$
+BEGIN
+  IF OLD.status IS DISTINCT FROM NEW.status THEN
+    INSERT INTO public.order_status_history (order_id, status, note)
+    VALUES (NEW.id, NEW.status, COALESCE(NEW.budget_rejection_reason, 'Status atualizado'));
+  END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+DROP TRIGGER IF EXISTS trg_log_order_status_change ON public.orders;
+CREATE TRIGGER trg_log_order_status_change
+  AFTER UPDATE ON public.orders
+  FOR EACH ROW
+  EXECUTE FUNCTION public.log_order_status_change();
+
+-- 9. Trigger para registrar histórico ao criar a O.S.
+CREATE OR REPLACE FUNCTION public.log_order_status_creation()
+RETURNS trigger AS $$
+BEGIN
+  INSERT INTO public.order_status_history (order_id, status, note)
+  VALUES (NEW.id, NEW.status, 'Chamado aberto');
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+DROP TRIGGER IF EXISTS trg_log_order_status_creation ON public.orders;
+CREATE TRIGGER trg_log_order_status_creation
+  AFTER INSERT ON public.orders
+  FOR EACH ROW
+  EXECUTE FUNCTION public.log_order_status_creation();
 
 -- Políticas do bucket order-media
 CREATE POLICY "Allow authenticated uploads to order-media"

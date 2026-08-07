@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import { Shield, Wrench, ClipboardList, MessageCircle } from "lucide-react";
+import { Shield, MessageCircle, ClipboardList } from "lucide-react";
+import TrackOrderModal from "@/components/track-order-modal";
 
 export default function HomePage() {
   return (
@@ -23,19 +24,20 @@ export default function HomePage() {
 
       <main className="flex-1 flex items-center justify-center p-6">
         <div className="max-w-2xl w-full text-center space-y-8">
-          <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-emerald-450/10 border border-emerald-450/20 text-emerald-450 text-sm">
-            <Wrench className="w-4 h-4" />
-            Sistema de Gestão de Serviços Técnicos
+          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-emerald-450/10 border border-emerald-450/20">
+            <MessageCircle className="w-8 h-8 text-emerald-450" />
           </div>
 
           <h1 className="text-4xl sm:text-5xl font-bold leading-tight">
-            Gestão de O.S. para{" "}
-            <span className="text-emerald-450">CFTV, Elétrica e Segurança</span>
+            Bem-vindo ao App da{" "}
+            <span className="text-emerald-450">RD Solutions</span>
           </h1>
 
           <p className="text-lg text-graphite-400">
-            Abra chamados de forma simples pelo celular e gerencie orçamentos, clientes e ordens de serviço em um painel profissional.
+            Conte com nossa equipe especializada para manter seu ambiente seguro e funcionando sempre.
           </p>
+
+          <p className="text-sm text-graphite-300">Abra seu chamado de forma rápida e prática.</p>
 
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
             <Link href="/chamado" className="w-full sm:w-auto">
@@ -43,12 +45,16 @@ export default function HomePage() {
                 <MessageCircle className="w-5 h-5" /> Abrir Chamado
               </Button>
             </Link>
-            <Link href="/painel" className="w-full sm:w-auto">
-              <Button size="lg" variant="outline" className="w-full gap-2">
-                <ClipboardList className="w-5 h-5" /> Acessar Painel
+            <TrackOrderModal trigger=
+              {<Button size="lg" variant="outline" className="w-full gap-2">
+                <ClipboardList className="w-5 h-5" /> Acompanhar Chamados
               </Button>
-            </Link>
+            } />
           </div>
+
+          <p className="text-xs text-graphite-500 flex items-center justify-center gap-1">
+            <Shield className="w-3 h-3" /> Seus dados e solicitações estão protegidos.
+          </p>
         </div>
       </main>
     </div>
