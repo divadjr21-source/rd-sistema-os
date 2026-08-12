@@ -276,6 +276,24 @@ export async function deleteClient(id: string): Promise<void> {
   if (error) throw error;
 }
 
+export async function updateClient(
+  id: string,
+  data: Partial<Omit<Client, "id" | "createdAt">>
+): Promise<Client> {
+  const { data: row, error } = await supabase
+    .from("clients")
+    .update({
+      full_name: data.fullName,
+      phone: data.phone ? data.phone.replace(/\D/g, "") : undefined,
+      address: data.address,
+    })
+    .eq("id", id)
+    .select()
+    .single();
+  if (error) throw error;
+  return mapClient(row);
+}
+
 // --- Catalog ---
 
 export async function getCatalog(): Promise<CatalogItem[]> {

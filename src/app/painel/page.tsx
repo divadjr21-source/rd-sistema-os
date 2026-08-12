@@ -33,32 +33,59 @@ export default function DashboardPage() {
     { contract: { id: string; title: string; client: { fullName: string }; monthlyValue: number }; invoice: { sentAt?: string } | null; invoiceDay: number }[]
   >([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
   const [currentMonth] = useState(new Date());
 
   useEffect(() => {
-    refresh();
-  }, [currentMonth]);
+    const loadData = async () => {
+      setLoading(true);
+      setLoadError(false);
+      try {
+        const month = currentMonth.getMonth() + 1;
+        const year = currentMonth.getFullYear();
 
-  const refresh = async () => {
-    const month = currentMonth.getMonth() + 1;
-    const year = currentMonth.getFullYear();
-    const [o, invoices] = await Promise.all([getOrders(), getPendingInvoices(month, year)]);
-    setOrders(o);
-    setPendingInvoices(
-      invoices.map((i) => ({
-        contract: i.contract,
-        invoice: i.invoice,
-        invoiceDay: i.contract.invoiceDay,
-      }))
-    );
-    setLoading(false);
-  };
+        const [ordersData, invoicesData] = await Promise.all([
+          getOrders(),
+          getPendingInvoices(month, year).catch(() => []),
+        ]);
+
+        setOrders(ordersData || []);
+        setPendingInvoices(
+          (invoicesData || []).map((i) => ({
+            contract: i.contract,
+            invoice: i.invoice,
+            invoiceDay: i.contract.invoiceDay,
+          }))
+        );
+      } catch (error) {
+        console.error("Erro ao carregar dashboard:", error);
+        setLoadError(true);
+        setOrders([]);
+        setPendingInvoices([]);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadData();
+  }, [currentMonth]);
 
   const handleMarkSent = async (contractId: string, amount: number) => {
     const month = currentMonth.getMonth() + 1;
     const year = currentMonth.getFullYear();
-    await markInvoiceAsSent(contractId, month, year, amount);
-    await refresh();
+    try {
+      await markInvoiceAsSent(contractId, month, year, amount);
+      const updated = await getPendingInvoices(month, year).catch(() => []);
+      setPendingInvoices(
+        (updated || []).map((i) => ({
+          contract: i.contract,
+          invoice: i.invoice,
+          invoiceDay: i.contract.invoiceDay,
+        }))
+      );
+    } catch (error) {
+      console.error("Erro ao marcar NF como enviada:", error);
+    }
   };
 
   const today = new Date().toISOString().slice(0, 10);
@@ -81,6 +108,19 @@ export default function DashboardPage() {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="animate-spin h-10 w-10 border-4 border-emerald-450 border-t-transparent rounded-full" />
+      </div>
+    );
+  }
+
+  if (loadError) {
+    return (
+      <div className="min-h-screen flex items-center justify-center p-6">
+        <div className="max-w-md w-full bg-graphite-900 border border-danger/30 rounded-2xl p-6 text-center">
+          <AlertCircle className="w-10 h-10 text-danger mx-auto mb-3" />
+          <h2 className="text-lg font-semibold mb-2">Erro ao carregar dashboard</h2>
+          <p className="text-sm text-graphite-400 mb-4">Não foi possível carregar os dados. Verifique sua conexão ou tente novamente.</p>
+          <Button onClick={() => window.location.reload()}>Tentar novamente</Button>
+        </div>
       </div>
     );
   }
