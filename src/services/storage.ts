@@ -7,6 +7,10 @@ import {
   BudgetItem,
   CompanySettings,
   BudgetStatus,
+  Contract,
+  ContractInvoice,
+  Appointment,
+  AppointmentStatus,
 } from "@/types";
 
 const supabase = createSupabaseClient();
@@ -64,6 +68,42 @@ type DbCompanySettings = {
   address: string;
   city: string;
   logo: string | null;
+};
+
+type DbContract = {
+  id: string;
+  client_id: string;
+  title: string;
+  description: string | null;
+  monthly_value: number;
+  invoice_day: number;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+  clients: DbClient | null;
+};
+
+type DbContractInvoice = {
+  id: string;
+  contract_id: string;
+  reference_month: number;
+  reference_year: number;
+  amount: number;
+  sent_at: string | null;
+  created_at: string;
+};
+
+type DbAppointment = {
+  id: string;
+  order_id: string | null;
+  title: string;
+  scheduled_date: string;
+  scheduled_time: string | null;
+  technician: string;
+  notes: string | null;
+  status: AppointmentStatus;
+  created_at: string;
+  orders: DbOrder | null;
 };
 
 // --- Mappers ---
@@ -132,6 +172,48 @@ function mapCompany(row: DbCompanySettings): CompanySettings {
     address: row.address,
     city: row.city,
     logo: row.logo || undefined,
+  };
+}
+
+function mapContract(row: DbContract): Contract {
+  return {
+    id: row.id,
+    clientId: row.client_id,
+    client: row.clients ? mapClient(row.clients) : ({} as Client),
+    title: row.title,
+    description: row.description || undefined,
+    monthlyValue: row.monthly_value,
+    invoiceDay: row.invoice_day,
+    isActive: row.is_active,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+function mapContractInvoice(row: DbContractInvoice): ContractInvoice {
+  return {
+    id: row.id,
+    contractId: row.contract_id,
+    referenceMonth: row.reference_month,
+    referenceYear: row.reference_year,
+    amount: row.amount,
+    sentAt: row.sent_at || undefined,
+    createdAt: row.created_at,
+  };
+}
+
+function mapAppointment(row: DbAppointment): Appointment {
+  return {
+    id: row.id,
+    orderId: row.order_id || undefined,
+    order: row.orders ? mapOrder(row.orders) : undefined,
+    title: row.title,
+    scheduledDate: row.scheduled_date,
+    scheduledTime: row.scheduled_time || undefined,
+    technician: row.technician,
+    notes: row.notes || undefined,
+    status: row.status,
+    createdAt: row.created_at,
   };
 }
 
@@ -563,4 +645,228 @@ export async function updateCompany(data: Partial<CompanySettings>): Promise<Com
     .single();
   if (error) throw error;
   return mapCompany(row);
+}
+
+// --- Contracts ---
+
+export async function getContracts(): Promise<Contract[]> {
+  const { data, error } = await supabase
+    .from("contracts")
+    .select("*, clients(*)")
+    .order("created_at", { ascending: false });
+  if (error) throw error;
+  return (data || []).map(mapContract);
+}
+
+export async function getContractById(id: string): Promise<Contract | undefined> {
+  const { data, error } = await supabase
+    .from("contracts")
+    .select("*, clients(*)")
+    .eq("id", id)
+    .maybeSingle();
+  if (error) throw error;
+  return data ? mapContract(data) : undefined;
+}
+
+export async function createContract(data: {
+  clientId: string;
+  title: string;
+  description?: string;
+  monthlyValue: number;
+  invoiceDay: number;
+}): Promise<Contract> {
+  const { data: row, error } = await supabase
+    .from("contracts")
+    .insert({
+      client_id: data.clientId,
+      title: data.title,
+      description: data.description,
+      monthly_value: data.monthlyValue,
+      invoice_day: data.invoiceDay,
+    })
+    .select("*, clients(*)")
+    .single();
+  if (error) throw error;
+  return mapContract(row);
+}
+
+export async function updateContract(
+  id: string,
+  data: Partial<{
+    clientId: string;
+    title: string;
+    description?: string;
+    monthlyValue: number;
+    invoiceDay: number;
+    isActive: boolean;
+  }>
+): Promise<Contract> {
+  const { data: row, error } = await supabase
+    .from("contracts")
+    .update({
+      client_id: data.clientId,
+      title: data.title,
+      description: data.description,
+      monthly_value: data.monthlyValue,
+      invoice_day: data.invoiceDay,
+      is_active: data.isActive,
+    })
+    .eq("id", id)
+    .select("*, clients(*)")
+    .single();
+  if (error) throw error;
+  return mapContract(row);
+}
+
+export async function deleteContract(id: string): Promise<void> {
+  const { error } = await supabase.from("contracts").delete().eq("id", id);
+  if (error) throw error;
+}
+
+// --- Contract Invoices ---
+
+export async function getPendingInvoices(month: number, year: number): Promise<
+  { contract: Contract; invoice: ContractInvoice | null }[]
+> {
+  const { data: contracts, error } = await supabase
+    .from("contracts")
+    .select("*, clients(*)")
+    .eq("is_active", true);
+  if (error) throw error;
+
+  if (!contracts || contracts.length === 0) return [];
+
+  const { data: invoices, error: invoiceError } = await supabase
+    .from("contract_invoices")
+    .select("*")
+    .eq("reference_month", month)
+    .eq("reference_year", year)
+    .in(
+      "contract_id",
+      contracts.map((c) => c.id)
+    );
+  if (invoiceError) throw invoiceError;
+
+  const invoiceMap = new Map((invoices || []).map((i) => [i.contract_id, mapContractInvoice(i)]));
+
+  return contracts.map((c) => ({
+    contract: mapContract(c),
+    invoice: invoiceMap.get(c.id) || null,
+  }));
+}
+
+export async function markInvoiceAsSent(
+  contractId: string,
+  month: number,
+  year: number,
+  amount: number
+): Promise<ContractInvoice> {
+  const { data: existing, error: findError } = await supabase
+    .from("contract_invoices")
+    .select("*")
+    .eq("contract_id", contractId)
+    .eq("reference_month", month)
+    .eq("reference_year", year)
+    .maybeSingle();
+  if (findError) throw findError;
+
+  if (existing) {
+    const { data: row, error } = await supabase
+      .from("contract_invoices")
+      .update({ sent_at: new Date().toISOString(), amount })
+      .eq("id", existing.id)
+      .select()
+      .single();
+    if (error) throw error;
+    return mapContractInvoice(row);
+  }
+
+  const { data: row, error } = await supabase
+    .from("contract_invoices")
+    .insert({
+      contract_id: contractId,
+      reference_month: month,
+      reference_year: year,
+      amount,
+      sent_at: new Date().toISOString(),
+    })
+    .select()
+    .single();
+  if (error) throw error;
+  return mapContractInvoice(row);
+}
+
+// --- Appointments ---
+
+export async function getAppointments(
+  startDate?: string,
+  endDate?: string
+): Promise<Appointment[]> {
+  let query = supabase.from("appointments").select("*, orders(*, clients(*), order_media(*), budget_items(*))");
+
+  if (startDate) query = query.gte("scheduled_date", startDate);
+  if (endDate) query = query.lte("scheduled_date", endDate);
+
+  const { data, error } = await query.order("scheduled_date", { ascending: true });
+  if (error) throw error;
+  return (data || []).map(mapAppointment);
+}
+
+export async function createAppointment(data: {
+  orderId?: string;
+  title: string;
+  scheduledDate: string;
+  scheduledTime?: string;
+  technician: string;
+  notes?: string;
+}): Promise<Appointment> {
+  const { data: row, error } = await supabase
+    .from("appointments")
+    .insert({
+      order_id: data.orderId,
+      title: data.title,
+      scheduled_date: data.scheduledDate,
+      scheduled_time: data.scheduledTime,
+      technician: data.technician,
+      notes: data.notes,
+    })
+    .select("*, orders(*, clients(*), order_media(*), budget_items(*))")
+    .single();
+  if (error) throw error;
+  return mapAppointment(row);
+}
+
+export async function updateAppointment(
+  id: string,
+  data: Partial<{
+    orderId?: string;
+    title: string;
+    scheduledDate: string;
+    scheduledTime?: string;
+    technician: string;
+    notes?: string;
+    status: AppointmentStatus;
+  }>
+): Promise<Appointment> {
+  const { data: row, error } = await supabase
+    .from("appointments")
+    .update({
+      order_id: data.orderId,
+      title: data.title,
+      scheduled_date: data.scheduledDate,
+      scheduled_time: data.scheduledTime,
+      technician: data.technician,
+      notes: data.notes,
+      status: data.status,
+    })
+    .eq("id", id)
+    .select("*, orders(*, clients(*), order_media(*), budget_items(*))")
+    .single();
+  if (error) throw error;
+  return mapAppointment(row);
+}
+
+export async function deleteAppointment(id: string): Promise<void> {
+  const { error } = await supabase.from("appointments").delete().eq("id", id);
+  if (error) throw error;
 }

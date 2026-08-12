@@ -14,6 +14,8 @@ import {
   LogOut,
   Menu,
   X,
+  CalendarDays,
+  Receipt,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -22,6 +24,8 @@ const nav = [
   { href: "/painel", label: "Dashboard", icon: LayoutDashboard },
   { href: "/painel/os", label: "Ordens de Serviço", icon: ClipboardList },
   { href: "/painel/orcamentos", label: "Orçamentos", icon: FileText },
+  { href: "/painel/agenda", label: "Agenda", icon: CalendarDays },
+  { href: "/painel/contratos", label: "Contratos", icon: Receipt },
   { href: "/painel/catalogo", label: "Catálogo", icon: Tags },
   { href: "/painel/clientes", label: "Clientes", icon: Users },
   { href: "/painel/empresa", label: "Empresa", icon: Building2 },

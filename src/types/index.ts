@@ -65,3 +65,42 @@ export interface CompanySettings {
   city: string;
   logo?: string;
 }
+
+export interface Contract {
+  id: string;
+  clientId: string;
+  client: Client;
+  title: string;
+  description?: string;
+  monthlyValue: number;
+  invoiceDay: number;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ContractInvoice {
+  id: string;
+  contractId: string;
+  referenceMonth: number;
+  referenceYear: number;
+  amount: number;
+  sentAt?: string;
+  createdAt: string;
+}
+
+export type AppointmentStatus = "agendado" | "em_andamento" | "concluido" | "cancelado";
+
+export interface Appointment {
+  id: string;
+  orderId?: string;
+  order?: OrderService;
+  title: string;
+  scheduledDate: string;
+  scheduledTime?: string;
+  technician: string;
+  notes?: string;
+  status: AppointmentStatus;
+  createdAt: string;
+}
+

@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useMemo } from "react";
 import Link from "next/link";
-import { getOrders } from "@/services/storage";
+import { getOrders, getPendingInvoices, markInvoiceAsSent } from "@/services/storage";
 import { OrderService, OrderStatus } from "@/types";
 import { formatCurrency, statusLabels, statusColors } from "@/lib/utils";
 import {
@@ -12,6 +12,9 @@ import {
   CheckCircle,
   Plus,
   ArrowRight,
+  FileText,
+  Send,
+  AlertCircle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -26,14 +29,37 @@ const columns: { status: OrderStatus; label: string }[] = [
 
 export default function DashboardPage() {
   const [orders, setOrders] = useState<OrderService[]>([]);
+  const [pendingInvoices, setPendingInvoices] = useState<
+    { contract: { id: string; title: string; client: { fullName: string }; monthlyValue: number }; invoice: { sentAt?: string } | null; invoiceDay: number }[]
+  >([]);
   const [loading, setLoading] = useState(true);
+  const [currentMonth] = useState(new Date());
 
   useEffect(() => {
-    getOrders().then((data) => {
-      setOrders(data);
-      setLoading(false);
-    });
-  }, []);
+    refresh();
+  }, [currentMonth]);
+
+  const refresh = async () => {
+    const month = currentMonth.getMonth() + 1;
+    const year = currentMonth.getFullYear();
+    const [o, invoices] = await Promise.all([getOrders(), getPendingInvoices(month, year)]);
+    setOrders(o);
+    setPendingInvoices(
+      invoices.map((i) => ({
+        contract: i.contract,
+        invoice: i.invoice,
+        invoiceDay: i.contract.invoiceDay,
+      }))
+    );
+    setLoading(false);
+  };
+
+  const handleMarkSent = async (contractId: string, amount: number) => {
+    const month = currentMonth.getMonth() + 1;
+    const year = currentMonth.getFullYear();
+    await markInvoiceAsSent(contractId, month, year, amount);
+    await refresh();
+  };
 
   const today = new Date().toISOString().slice(0, 10);
   const todayCount = orders.filter((o) => o.createdAt.slice(0, 10) === today).length;
@@ -46,6 +72,10 @@ export default function DashboardPage() {
         return acc + total;
       }, 0);
   }, [orders]);
+
+  const currentDay = new Date().getDate();
+  const overdueInvoices = pendingInvoices.filter((p) => !p.invoice?.sentAt && p.invoiceDay <= currentDay);
+  const upcomingInvoices = pendingInvoices.filter((p) => !p.invoice?.sentAt && p.invoiceDay > currentDay);
 
   if (loading) {
     return (
@@ -80,6 +110,40 @@ export default function DashboardPage() {
         <Card icon={Clock} label="Em Andamento" value={orders.filter((o) => ["aprovado", "em_execucao"].includes(o.status)).length.toString()} />
         <Card icon={CheckCircle} label="Finalizados" value={orders.filter((o) => o.status === "finalizado").length.toString()} />
       </div>
+
+      {(overdueInvoices.length > 0 || upcomingInvoices.length > 0) && (
+        <div className="bg-graphite-900 border border-graphite-800 rounded-2xl p-5 shadow-card">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <FileText className="w-5 h-5 text-emerald-450" />
+              <h2 className="text-lg font-semibold">Notas Fiscais do Mês</h2>
+            </div>
+            <span className="text-sm text-graphite-400">
+              {currentMonth.toLocaleDateString("pt-BR", { month: "long", year: "numeric" })}
+            </span>
+          </div>
+
+          <div className="space-y-3">
+            {overdueInvoices.map((p) => (
+              <InvoiceAlertRow
+                key={p.contract.id}
+                contract={p.contract}
+                invoiceDay={p.invoiceDay}
+                overdue
+                onMarkSent={() => handleMarkSent(p.contract.id, p.contract.monthlyValue)}
+              />
+            ))}
+            {upcomingInvoices.map((p) => (
+              <InvoiceAlertRow
+                key={p.contract.id}
+                contract={p.contract}
+                invoiceDay={p.invoiceDay}
+                onMarkSent={() => handleMarkSent(p.contract.id, p.contract.monthlyValue)}
+              />
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="bg-graphite-900 border border-graphite-800 rounded-2xl p-5 shadow-card">
         <h2 className="text-lg font-semibold mb-4">Ordens de Serviço</h2>
@@ -150,6 +214,38 @@ function Card({
       </div>
       <p className={cn("text-2xl font-bold mt-3", highlight && "text-emerald-450")}>{value}</p>
       <p className="text-sm text-graphite-400">{label}</p>
+    </div>
+  );
+}
+
+function InvoiceAlertRow({
+  contract,
+  invoiceDay,
+  overdue,
+  onMarkSent,
+}: {
+  contract: { id: string; title: string; client: { fullName: string }; monthlyValue: number };
+  invoiceDay: number;
+  overdue?: boolean;
+  onMarkSent: () => void;
+}) {
+  return (
+    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-graphite-950 border border-graphite-800 rounded-xl p-4">
+      <div className="flex items-start gap-3">
+        <div className={cn("p-2 rounded-lg", overdue ? "bg-danger/10 text-danger" : "bg-warning/10 text-warning")}>
+          {overdue ? <AlertCircle className="w-5 h-5" /> : <Clock className="w-5 h-5" />}
+        </div>
+        <div>
+          <p className="font-medium">{contract.title}</p>
+          <p className="text-sm text-graphite-400">{contract.client.fullName} - {formatCurrency(contract.monthlyValue)}</p>
+          <p className="text-xs text-graphite-500">
+            NF deve ser emitida no dia {invoiceDay}
+          </p>
+        </div>
+      </div>
+      <Button size="sm" className="gap-2 shrink-0" onClick={onMarkSent}>
+        <Send className="w-4 h-4" /> Marcar como Enviada
+      </Button>
     </div>
   );
 }
