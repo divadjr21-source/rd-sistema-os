@@ -78,6 +78,7 @@ export default function AgendaPage() {
 
   const [form, setForm] = useState({
     orderId: "",
+    clientId: "",
     title: "",
     scheduledDate: "",
     scheduledTime: "",
@@ -85,6 +86,8 @@ export default function AgendaPage() {
     notes: "",
     status: "agendado" as AppointmentStatus,
   });
+
+  const selectedOrder = orders.find((o) => o.id === form.orderId);
 
   const monthStart = startOfMonth(currentDate);
   const monthEnd = endOfMonth(currentDate);
@@ -105,6 +108,7 @@ export default function AgendaPage() {
   const resetForm = () => {
     setForm({
       orderId: "",
+      clientId: "",
       title: "",
       scheduledDate: "",
       scheduledTime: "",
@@ -128,9 +132,10 @@ export default function AgendaPage() {
     setEditingId(appointment.id);
     setForm({
       orderId: appointment.orderId || "",
+      clientId: appointment.clientId || appointment.order?.clientId || "",
       title: appointment.title,
-      scheduledDate: appointment.scheduledDate,
-      scheduledTime: appointment.scheduledTime || "",
+      scheduledDate: appointment.scheduledAt ? format(parseISO(appointment.scheduledAt), "yyyy-MM-dd") : "",
+      scheduledTime: appointment.scheduledAt ? format(parseISO(appointment.scheduledAt), "HH:mm") : "",
       technician: appointment.technician,
       notes: appointment.notes || "",
       status: appointment.status,
@@ -144,11 +149,18 @@ export default function AgendaPage() {
 
     setSubmitting(true);
     try {
+      const scheduledAt = form.scheduledTime
+        ? `${form.scheduledDate}T${form.scheduledTime}:00`
+        : `${form.scheduledDate}T00:00:00`;
+
+      const orderId = form.orderId || null;
+      const clientId = form.clientId || selectedOrder?.clientId || null;
+
       const payload = {
-        orderId: form.orderId || undefined,
+        orderId,
+        clientId,
         title: form.title,
-        scheduledDate: form.scheduledDate,
-        scheduledTime: form.scheduledTime || undefined,
+        scheduledAt,
         technician: form.technician,
         notes: form.notes || undefined,
       };
@@ -161,6 +173,9 @@ export default function AgendaPage() {
       await refresh();
       setModalOpen(false);
       resetForm();
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : "Erro ao salvar agendamento";
+      alert(message);
     } finally {
       setSubmitting(false);
     }
@@ -180,7 +195,7 @@ export default function AgendaPage() {
   };
 
   const getAppointmentsForDay = (day: Date) =>
-    appointments.filter((a) => isSameDay(parseISO(a.scheduledDate), day));
+    appointments.filter((a) => a.scheduledAt && isSameDay(parseISO(a.scheduledAt), day));
 
   const selectedDateAppointments = selectedDate ? getAppointmentsForDay(selectedDate) : [];
 
@@ -249,7 +264,7 @@ export default function AgendaPage() {
                         appointmentStatusColors[a.status]
                       )}
                     >
-                      {format(parseISO(a.scheduledDate), "HH:mm")} {a.title}
+                      {a.scheduledAt ? format(parseISO(a.scheduledAt), "HH:mm") : ""} {a.title}
                     </div>
                   ))}
                   {dayAppointments.length > 2 && (
@@ -299,7 +314,10 @@ export default function AgendaPage() {
           <form onSubmit={handleSubmit} className="space-y-4 mt-2">
             <div className="space-y-1.5">
               <Label>Vincular a O.S. (opcional)</Label>
-              <Select value={form.orderId} onValueChange={(v) => setForm({ ...form, orderId: v })}>
+              <Select value={form.orderId} onValueChange={(v) => {
+                const order = orders.find((o) => o.id === v);
+                setForm({ ...form, orderId: v, clientId: order ? order.clientId : "" });
+              }}>
                 <SelectTrigger>
                   <SelectValue placeholder="Selecione uma O.S." />
                 </SelectTrigger>
@@ -445,11 +463,11 @@ function AppointmentRow({
         <div className="flex flex-wrap gap-3 text-sm text-graphite-400">
           <span className="flex items-center gap-1">
             <Calendar className="w-3.5 h-3.5 text-emerald-450" />
-            {format(parseISO(appointment.scheduledDate), "dd/MM/yyyy")}
+            {appointment.scheduledAt ? format(parseISO(appointment.scheduledAt), "dd/MM/yyyy") : ""}
           </span>
-          {appointment.scheduledTime && (
+          {appointment.scheduledAt && (
             <span className="flex items-center gap-1">
-              <Clock className="w-3.5 h-3.5 text-emerald-450" /> {appointment.scheduledTime}
+              <Clock className="w-3.5 h-3.5 text-emerald-450" /> {format(parseISO(appointment.scheduledAt), "HH:mm")}
             </span>
           )}
           <span className="flex items-center gap-1">

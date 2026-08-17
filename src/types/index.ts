@@ -73,8 +73,8 @@ export interface Contract {
   title: string;
   description?: string;
   monthlyValue: number;
-  invoiceDay: number;
-  isActive: boolean;
+  nfIssueDay: number;
+  active: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -94,10 +94,11 @@ export type AppointmentStatus = "agendado" | "em_andamento" | "concluido" | "can
 export interface Appointment {
   id: string;
   orderId?: string;
+  clientId?: string;
   order?: OrderService;
+  client?: Client;
   title: string;
-  scheduledDate: string;
-  scheduledTime?: string;
+  scheduledAt: string;
   technician: string;
   notes?: string;
   status: AppointmentStatus;

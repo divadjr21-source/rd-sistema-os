@@ -7,8 +7,8 @@ CREATE TABLE IF NOT EXISTS public.contracts (
   title text NOT NULL,
   description text,
   monthly_value numeric NOT NULL,
-  invoice_day integer NOT NULL CHECK (invoice_day BETWEEN 1 AND 31),
-  is_active boolean NOT NULL DEFAULT true,
+  nf_issue_day integer NOT NULL CHECK (nf_issue_day BETWEEN 1 AND 31),
+  active boolean NOT NULL DEFAULT true,
   created_at timestamptz DEFAULT now(),
   updated_at timestamptz DEFAULT now()
 );
@@ -33,9 +33,9 @@ COMMENT ON TABLE public.contract_invoices IS 'Notas fiscais emitidas para contra
 CREATE TABLE IF NOT EXISTS public.appointments (
   id uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
   order_id uuid REFERENCES public.orders(id) ON DELETE CASCADE,
+  client_id uuid REFERENCES public.clients(id) ON DELETE SET NULL,
   title text NOT NULL,
-  scheduled_date date NOT NULL,
-  scheduled_time time,
+  scheduled_at timestamptz NOT NULL,
   technician text NOT NULL,
   notes text,
   status text NOT NULL DEFAULT 'agendado' CHECK (status IN ('agendado','em_andamento','concluido','cancelado')),

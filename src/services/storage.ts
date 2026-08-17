@@ -76,8 +76,8 @@ type DbContract = {
   title: string;
   description: string | null;
   monthly_value: number;
-  invoice_day: number;
-  is_active: boolean;
+  nf_issue_day: number;
+  active: boolean;
   created_at: string;
   updated_at: string;
   clients: DbClient | null;
@@ -96,14 +96,15 @@ type DbContractInvoice = {
 type DbAppointment = {
   id: string;
   order_id: string | null;
+  client_id: string | null;
   title: string;
-  scheduled_date: string;
-  scheduled_time: string | null;
+  scheduled_at: string;
   technician: string;
   notes: string | null;
   status: AppointmentStatus;
   created_at: string;
   orders: DbOrder | null;
+  clients: DbClient | null;
 };
 
 // --- Mappers ---
@@ -183,8 +184,8 @@ function mapContract(row: DbContract): Contract {
     title: row.title,
     description: row.description || undefined,
     monthlyValue: row.monthly_value,
-    invoiceDay: row.invoice_day,
-    isActive: row.is_active,
+    nfIssueDay: row.nf_issue_day,
+    active: row.active,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -206,10 +207,11 @@ function mapAppointment(row: DbAppointment): Appointment {
   return {
     id: row.id,
     orderId: row.order_id || undefined,
+    clientId: row.client_id || undefined,
     order: row.orders ? mapOrder(row.orders) : undefined,
+    client: row.clients ? mapClient(row.clients) : undefined,
     title: row.title,
-    scheduledDate: row.scheduled_date,
-    scheduledTime: row.scheduled_time || undefined,
+    scheduledAt: row.scheduled_at,
     technician: row.technician,
     notes: row.notes || undefined,
     status: row.status,
@@ -691,7 +693,7 @@ export async function createContract(data: {
   title: string;
   description?: string;
   monthlyValue: number;
-  invoiceDay: number;
+  nfIssueDay: number;
 }): Promise<Contract> {
   const { data: row, error } = await supabase
     .from("contracts")
@@ -699,8 +701,9 @@ export async function createContract(data: {
       client_id: data.clientId,
       title: data.title,
       description: data.description,
-      monthly_value: data.monthlyValue,
-      invoice_day: data.invoiceDay,
+      monthly_value: parseFloat(String(data.monthlyValue)),
+      nf_issue_day: parseInt(String(data.nfIssueDay), 10),
+      active: true,
     })
     .select("*, clients(*)")
     .single();
@@ -715,20 +718,21 @@ export async function updateContract(
     title: string;
     description?: string;
     monthlyValue: number;
-    invoiceDay: number;
-    isActive: boolean;
+    nfIssueDay: number;
+    active: boolean;
   }>
 ): Promise<Contract> {
+  const updateData: Record<string, unknown> = {};
+  if (data.clientId !== undefined) updateData.client_id = data.clientId;
+  if (data.title !== undefined) updateData.title = data.title;
+  if (data.description !== undefined) updateData.description = data.description;
+  if (data.monthlyValue !== undefined) updateData.monthly_value = parseFloat(String(data.monthlyValue));
+  if (data.nfIssueDay !== undefined) updateData.nf_issue_day = parseInt(String(data.nfIssueDay), 10);
+  if (data.active !== undefined) updateData.active = data.active;
+
   const { data: row, error } = await supabase
     .from("contracts")
-    .update({
-      client_id: data.clientId,
-      title: data.title,
-      description: data.description,
-      monthly_value: data.monthlyValue,
-      invoice_day: data.invoiceDay,
-      is_active: data.isActive,
-    })
+    .update(updateData)
     .eq("id", id)
     .select("*, clients(*)")
     .single();
@@ -749,7 +753,7 @@ export async function getPendingInvoices(month: number, year: number): Promise<
   const { data: contracts, error } = await supabase
     .from("contracts")
     .select("*, clients(*)")
-    .eq("is_active", true);
+    .eq("active", true);
   if (error) throw error;
 
   if (!contracts || contracts.length === 0) return [];
@@ -820,35 +824,38 @@ export async function getAppointments(
   startDate?: string,
   endDate?: string
 ): Promise<Appointment[]> {
-  let query = supabase.from("appointments").select("*, orders(*, clients(*), order_media(*), budget_items(*))");
+  let query = supabase.from("appointments").select("*, orders(*, clients(*), order_media(*), budget_items(*)), clients(*)");
 
-  if (startDate) query = query.gte("scheduled_date", startDate);
-  if (endDate) query = query.lte("scheduled_date", endDate);
+  if (startDate) query = query.gte("scheduled_at", startDate);
+  if (endDate) query = query.lte("scheduled_at", endDate);
 
-  const { data, error } = await query.order("scheduled_date", { ascending: true });
+  const { data, error } = await query.order("scheduled_at", { ascending: true });
   if (error) throw error;
   return (data || []).map(mapAppointment);
 }
 
 export async function createAppointment(data: {
-  orderId?: string;
+  orderId?: string | null;
+  clientId?: string | null;
   title: string;
-  scheduledDate: string;
-  scheduledTime?: string;
+  scheduledAt: string;
   technician: string;
   notes?: string;
 }): Promise<Appointment> {
+  const orderId = data.orderId || null;
+  const clientId = data.clientId || null;
   const { data: row, error } = await supabase
     .from("appointments")
     .insert({
-      order_id: data.orderId,
+      order_id: orderId,
+      client_id: clientId,
       title: data.title,
-      scheduled_date: data.scheduledDate,
-      scheduled_time: data.scheduledTime,
+      scheduled_at: data.scheduledAt,
       technician: data.technician,
       notes: data.notes,
+      status: "agendado",
     })
-    .select("*, orders(*, clients(*), order_media(*), budget_items(*))")
+    .select("*, orders(*, clients(*), order_media(*), budget_items(*)), clients(*)")
     .single();
   if (error) throw error;
   return mapAppointment(row);
@@ -857,28 +864,29 @@ export async function createAppointment(data: {
 export async function updateAppointment(
   id: string,
   data: Partial<{
-    orderId?: string;
+    orderId?: string | null;
+    clientId?: string | null;
     title: string;
-    scheduledDate: string;
-    scheduledTime?: string;
+    scheduledAt: string;
     technician: string;
     notes?: string;
     status: AppointmentStatus;
   }>
 ): Promise<Appointment> {
+  const updateData: Record<string, unknown> = {};
+  if (data.orderId !== undefined) updateData.order_id = data.orderId || null;
+  if (data.clientId !== undefined) updateData.client_id = data.clientId || null;
+  if (data.title !== undefined) updateData.title = data.title;
+  if (data.scheduledAt !== undefined) updateData.scheduled_at = data.scheduledAt;
+  if (data.technician !== undefined) updateData.technician = data.technician;
+  if (data.notes !== undefined) updateData.notes = data.notes;
+  if (data.status !== undefined) updateData.status = data.status;
+
   const { data: row, error } = await supabase
     .from("appointments")
-    .update({
-      order_id: data.orderId,
-      title: data.title,
-      scheduled_date: data.scheduledDate,
-      scheduled_time: data.scheduledTime,
-      technician: data.technician,
-      notes: data.notes,
-      status: data.status,
-    })
+    .update(updateData)
     .eq("id", id)
-    .select("*, orders(*, clients(*), order_media(*), budget_items(*))")
+    .select("*, orders(*, clients(*), order_media(*), budget_items(*)), clients(*)")
     .single();
   if (error) throw error;
   return mapAppointment(row);

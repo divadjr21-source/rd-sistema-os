@@ -46,8 +46,8 @@ export default function ContractsPage() {
     title: "",
     description: "",
     monthlyValue: "",
-    invoiceDay: "5",
-    isActive: true,
+    nfIssueDay: "5",
+    active: true,
   });
 
   useEffect(() => {
@@ -66,8 +66,8 @@ export default function ContractsPage() {
       title: "",
       description: "",
       monthlyValue: "",
-      invoiceDay: "5",
-      isActive: true,
+      nfIssueDay: "5",
+      active: true,
     });
     setEditingId(null);
   };
@@ -90,15 +90,15 @@ export default function ContractsPage() {
       title: contract.title,
       description: contract.description || "",
       monthlyValue: contract.monthlyValue.toString(),
-      invoiceDay: contract.invoiceDay.toString(),
-      isActive: contract.isActive,
+      nfIssueDay: contract.nfIssueDay.toString(),
+      active: contract.active,
     });
     setModalOpen(true);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!form.clientId || !form.title || !form.monthlyValue || !form.invoiceDay || submitting) return;
+    if (!form.clientId || !form.title || !form.monthlyValue || !form.nfIssueDay || submitting) return;
 
     setSubmitting(true);
     try {
@@ -107,17 +107,20 @@ export default function ContractsPage() {
         title: form.title,
         description: form.description,
         monthlyValue: Number(form.monthlyValue),
-        invoiceDay: Number(form.invoiceDay),
+        nfIssueDay: Number(form.nfIssueDay),
       };
 
       if (editingId) {
-        await updateContract(editingId, { ...payload, isActive: form.isActive });
+        await updateContract(editingId, { ...payload, active: form.active });
       } else {
         await createContract(payload);
       }
       await refresh();
       setModalOpen(false);
       resetForm();
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : "Erro ao salvar contrato";
+      alert(message);
     } finally {
       setSubmitting(false);
     }
@@ -210,14 +213,14 @@ export default function ContractsPage() {
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <Label htmlFor="invoiceDay">Dia de Emissão da NF</Label>
+                  <Label htmlFor="nfIssueDay">Dia de Emissão da NF</Label>
                   <Input
-                    id="invoiceDay"
+                    id="nfIssueDay"
                     type="number"
                     min={1}
                     max={31}
-                    value={form.invoiceDay}
-                    onChange={(e) => setForm({ ...form, invoiceDay: e.target.value })}
+                    value={form.nfIssueDay}
+                    onChange={(e) => setForm({ ...form, nfIssueDay: e.target.value })}
                     required
                   />
                 </div>
@@ -226,13 +229,13 @@ export default function ContractsPage() {
               {editingId && (
                 <div className="flex items-center gap-2">
                   <input
-                    id="isActive"
+                    id="active"
                     type="checkbox"
-                    checked={form.isActive}
-                    onChange={(e) => setForm({ ...form, isActive: e.target.checked })}
+                    checked={form.active}
+                    onChange={(e) => setForm({ ...form, active: e.target.checked })}
                     className="h-4 w-4 rounded border-graphite-700 bg-graphite-900 text-emerald-450"
                   />
-                  <Label htmlFor="isActive" className="text-sm">Contrato ativo</Label>
+                  <Label htmlFor="active" className="text-sm">Contrato ativo</Label>
                 </div>
               )}
 
@@ -266,7 +269,7 @@ export default function ContractsPage() {
               key={contract.id}
               className={cn(
                 "bg-graphite-950 border border-graphite-800 rounded-xl p-4",
-                !contract.isActive && "opacity-60"
+                !contract.active && "opacity-60"
               )}
             >
               <div className="flex items-start justify-between mb-3">
@@ -279,12 +282,12 @@ export default function ContractsPage() {
                     <span
                       className={cn(
                         "text-[10px] px-2 py-0.5 rounded-full border",
-                        contract.isActive
+                        contract.active
                           ? "bg-emerald-450/10 text-emerald-450 border-emerald-450/30"
                           : "bg-graphite-800 text-graphite-400 border-graphite-700"
                       )}
                     >
-                      {contract.isActive ? "Ativo" : "Inativo"}
+                      {contract.active ? "Ativo" : "Inativo"}
                     </span>
                   </div>
                 </div>
@@ -312,7 +315,7 @@ export default function ContractsPage() {
                   <DollarSign className="w-4 h-4 text-emerald-450" /> {formatCurrency(contract.monthlyValue)}
                 </div>
                 <div className="flex items-center gap-2 text-graphite-300">
-                  <Calendar className="w-4 h-4 text-emerald-450" /> NF emitida todo dia {contract.invoiceDay}
+                  <Calendar className="w-4 h-4 text-emerald-450" /> NF emitida todo dia {contract.nfIssueDay}
                 </div>
               </div>
             </div>

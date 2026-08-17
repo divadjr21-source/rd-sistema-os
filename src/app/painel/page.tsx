@@ -30,7 +30,7 @@ const columns: { status: OrderStatus; label: string }[] = [
 export default function DashboardPage() {
   const [orders, setOrders] = useState<OrderService[]>([]);
   const [pendingInvoices, setPendingInvoices] = useState<
-    { contract: { id: string; title: string; client: { fullName: string }; monthlyValue: number }; invoice: { sentAt?: string } | null; invoiceDay: number }[]
+    { contract: { id: string; title: string; client: { fullName: string }; monthlyValue: number }; invoice: { sentAt?: string } | null; nfIssueDay: number }[]
   >([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
@@ -54,7 +54,7 @@ export default function DashboardPage() {
           (invoicesData || []).map((i) => ({
             contract: i.contract,
             invoice: i.invoice,
-            invoiceDay: i.contract.invoiceDay,
+            nfIssueDay: i.contract.nfIssueDay,
           }))
         );
       } catch (error) {
@@ -80,7 +80,7 @@ export default function DashboardPage() {
         (updated || []).map((i) => ({
           contract: i.contract,
           invoice: i.invoice,
-          invoiceDay: i.contract.invoiceDay,
+          nfIssueDay: i.contract.nfIssueDay,
         }))
       );
     } catch (error) {
@@ -101,8 +101,8 @@ export default function DashboardPage() {
   }, [orders]);
 
   const currentDay = new Date().getDate();
-  const overdueInvoices = pendingInvoices.filter((p) => !p.invoice?.sentAt && p.invoiceDay <= currentDay);
-  const upcomingInvoices = pendingInvoices.filter((p) => !p.invoice?.sentAt && p.invoiceDay > currentDay);
+  const overdueInvoices = pendingInvoices.filter((p) => !p.invoice?.sentAt && p.nfIssueDay <= currentDay);
+  const upcomingInvoices = pendingInvoices.filter((p) => !p.invoice?.sentAt && p.nfIssueDay > currentDay);
 
   if (loading) {
     return (
@@ -168,7 +168,7 @@ export default function DashboardPage() {
               <InvoiceAlertRow
                 key={p.contract.id}
                 contract={p.contract}
-                invoiceDay={p.invoiceDay}
+                invoiceDay={p.nfIssueDay}
                 overdue
                 onMarkSent={() => handleMarkSent(p.contract.id, p.contract.monthlyValue)}
               />
@@ -177,7 +177,7 @@ export default function DashboardPage() {
               <InvoiceAlertRow
                 key={p.contract.id}
                 contract={p.contract}
-                invoiceDay={p.invoiceDay}
+                invoiceDay={p.nfIssueDay}
                 onMarkSent={() => handleMarkSent(p.contract.id, p.contract.monthlyValue)}
               />
             ))}
