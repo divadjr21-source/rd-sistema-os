@@ -89,9 +89,13 @@ export default function AgendaPage() {
 
   const selectedOrder = orders.find((o) => o.id === form.orderId);
 
+  const toLocalDate = (date: Date) => {
+    return new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  };
+
   const monthStart = startOfMonth(currentDate);
   const monthEnd = endOfMonth(currentDate);
-  const days = eachDayOfInterval({ start: monthStart, end: monthEnd });
+  const days = eachDayOfInterval({ start: monthStart, end: monthEnd }).map(toLocalDate);
 
   useEffect(() => {
     refresh();
@@ -122,8 +126,9 @@ export default function AgendaPage() {
   const openNew = (date?: Date) => {
     resetForm();
     if (date) {
-      setForm((prev) => ({ ...prev, scheduledDate: format(date, "yyyy-MM-dd") }));
-      setSelectedDate(date);
+      const localDate = toLocalDate(date);
+      setForm((prev) => ({ ...prev, scheduledDate: format(localDate, "yyyy-MM-dd") }));
+      setSelectedDate(localDate);
     }
     setModalOpen(true);
   };
@@ -195,7 +200,12 @@ export default function AgendaPage() {
   };
 
   const getAppointmentsForDay = (day: Date) =>
-    appointments.filter((a) => a.scheduledAt && isSameDay(parseISO(a.scheduledAt), day));
+    appointments.filter((a) => {
+      if (!a.scheduledAt) return false;
+      const [year, month, date] = a.scheduledAt.split("T")[0].split("-").map(Number);
+      const scheduledLocal = new Date(year, month - 1, date);
+      return isSameDay(scheduledLocal, day);
+    });
 
   const selectedDateAppointments = selectedDate ? getAppointmentsForDay(selectedDate) : [];
 

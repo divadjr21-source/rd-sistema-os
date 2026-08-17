@@ -32,6 +32,18 @@ export function formatPhoneInput(value: string) {
   return digits.replace(/(\d{2})(\d{5})(\d{4})/, "($1) $2-$3");
 }
 
+export const priorityLabels: Record<string, string> = {
+  baixa: "Baixa",
+  media: "Média",
+  alta: "Alta",
+};
+
+export const priorityColors: Record<string, string> = {
+  baixa: "bg-info/15 text-info border-info/30",
+  media: "bg-warning/15 text-warning border-warning/30",
+  alta: "bg-danger/15 text-danger border-danger/30",
+};
+
 export function generateOSNumber() {
   const prefix = new Date().getFullYear();
   const suffix = Math.floor(Math.random() * 9000) + 1000;

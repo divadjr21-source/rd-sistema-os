@@ -11,6 +11,7 @@ import {
   ContractInvoice,
   Appointment,
   AppointmentStatus,
+  OrderPriority,
 } from "@/types";
 
 const supabase = createSupabaseClient();
@@ -31,6 +32,7 @@ type DbOrder = {
   client_id: string;
   description: string;
   status: OrderStatus;
+  priority: OrderPriority;
   budget_status: BudgetStatus | null;
   budget_approved_at: string | null;
   budget_rejected_at: string | null;
@@ -151,6 +153,7 @@ function mapOrder(row: DbOrder): OrderService {
     client,
     description: row.description,
     status: row.status,
+    priority: row.priority || "media",
     media: (row.order_media || []).map((m) => ({
       id: m.id,
       url: m.url,
@@ -456,6 +459,7 @@ export async function createOrder(data: {
   client: Omit<Client, "id" | "createdAt">;
   description: string;
   media: { url: string; type: "image" | "video"; name: string }[];
+  priority?: OrderPriority;
 }): Promise<OrderService> {
   const client = await createClient(data.client);
   const { data: orderRow, error } = await supabase
@@ -465,6 +469,7 @@ export async function createOrder(data: {
       description: data.description,
       status: "pendente",
       budget_status: "pendente",
+      priority: data.priority || "media",
     })
     .select(
       `
@@ -490,6 +495,7 @@ export async function createOrderManual(data: {
   client: Omit<Client, "id" | "createdAt">;
   description: string;
   status: OrderStatus;
+  priority?: OrderPriority;
   media: { url: string; type: "image" | "video"; name: string }[];
 }): Promise<OrderService> {
   const client = await createClient(data.client);
@@ -500,6 +506,7 @@ export async function createOrderManual(data: {
       description: data.description,
       status: data.status,
       budget_status: "pendente",
+      priority: data.priority || "media",
     })
     .select(
       `
@@ -529,6 +536,45 @@ export async function updateOrderStatus(id: string, status: OrderStatus): Promis
   const { error } = await supabase.from("orders").update({ status }).eq("id", id);
   if (error) throw error;
   return getOrderById(id);
+}
+
+export async function updateOrderPriority(id: string, priority: OrderPriority): Promise<OrderService | undefined> {
+  const { error } = await supabase.from("orders").update({ priority }).eq("id", id);
+  if (error) throw error;
+  return getOrderById(id);
+}
+
+export async function updateOrderDescription(id: string, description: string): Promise<OrderService | undefined> {
+  const { error } = await supabase.from("orders").update({ description }).eq("id", id);
+  if (error) throw error;
+  return getOrderById(id);
+}
+
+export async function addOrderUpdate(
+  orderId: string,
+  note: string
+): Promise<{ id: string; note: string; createdAt: string }[]> {
+  const { error } = await supabase.from("order_status_history").insert({
+    order_id: orderId,
+    status: "tratativa",
+    note,
+  });
+  if (error) throw error;
+  return getOrderUpdates(orderId);
+}
+
+export async function getOrderUpdates(orderId: string): Promise<{ id: string; note: string; createdAt: string }[]> {
+  const { data, error } = await supabase
+    .from("order_status_history")
+    .select("id, note, created_at")
+    .eq("order_id", orderId)
+    .order("created_at", { ascending: false });
+  if (error) throw error;
+  return (data || []).map((row) => ({
+    id: row.id,
+    note: row.note,
+    createdAt: row.created_at,
+  }));
 }
 
 export async function updateOrderBudgetStatus(

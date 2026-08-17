@@ -24,11 +24,16 @@ import {
   getOrderById,
   getCatalog,
   updateOrderStatus,
+  updateOrderPriority,
+  updateOrderDescription,
+  addOrderUpdate,
+  getOrderUpdates,
   addBudgetItem,
   removeBudgetItem,
 } from "@/services/storage";
-import { OrderService, OrderStatus, CatalogItem } from "@/types";
-import { formatCurrency, formatPhone, statusLabels } from "@/lib/utils";
+import { OrderService, OrderStatus, OrderPriority, CatalogItem } from "@/types";
+import { formatCurrency, formatPhone, statusLabels, priorityLabels, priorityColors } from "@/lib/utils";
+import { cn } from "@/lib/utils";
 import {
   ArrowLeft,
   Phone,
@@ -43,6 +48,8 @@ import {
   Package,
   Wrench,
   Video,
+  Clock,
+  MessageSquare,
 } from "lucide-react";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
@@ -51,9 +58,12 @@ const statusOptions: OrderStatus[] = [
   "pendente",
   "em_orcamento",
   "aprovado",
+  "recusado",
   "em_execucao",
   "finalizado",
 ];
+
+const priorityOptions: OrderPriority[] = ["baixa", "media", "alta"];
 
 export default function OrderDetailPage() {
   const params = useParams();
@@ -69,6 +79,9 @@ export default function OrderDetailPage() {
     quantity: 1,
     unitPrice: 0,
   });
+  const [updates, setUpdates] = useState<{ id: string; note: string; createdAt: string }[]>([]);
+  const [newUpdate, setNewUpdate] = useState("");
+  const [sendingUpdate, setSendingUpdate] = useState(false);
 
   useEffect(() => {
     refresh();
@@ -76,7 +89,11 @@ export default function OrderDetailPage() {
 
   const refresh = async () => {
     const [o, c] = await Promise.all([getOrderById(id), getCatalog()]);
-    if (o) setOrder(o);
+    if (o) {
+      setOrder(o);
+      const history = await getOrderUpdates(id);
+      setUpdates(history);
+    }
     setCatalog(c);
   };
 
@@ -88,6 +105,31 @@ export default function OrderDetailPage() {
     await updateOrderStatus(id, status);
     const updated = await getOrderById(id);
     if (updated) setOrder(updated);
+  };
+
+  const handlePriorityChange = async (priority: OrderPriority) => {
+    await updateOrderPriority(id, priority);
+    const updated = await getOrderById(id);
+    if (updated) setOrder(updated);
+  };
+
+  const handleDescriptionChange = async (description: string) => {
+    await updateOrderDescription(id, description);
+    const updated = await getOrderById(id);
+    if (updated) setOrder(updated);
+  };
+
+  const handleAddUpdate = async () => {
+    const note = newUpdate.trim();
+    if (!note || sendingUpdate) return;
+    setSendingUpdate(true);
+    try {
+      const history = await addOrderUpdate(id, note);
+      setUpdates(history);
+      setNewUpdate("");
+    } finally {
+      setSendingUpdate(false);
+    }
   };
 
   const handleAddItem = async () => {
@@ -169,6 +211,16 @@ export default function OrderDetailPage() {
               ))}
             </SelectContent>
           </Select>
+          <Select value={order.priority} onValueChange={(v) => handlePriorityChange(v as OrderPriority)}>
+            <SelectTrigger className="w-[150px]">
+              <SelectValue placeholder="Prioridade" />
+            </SelectTrigger>
+            <SelectContent>
+              {priorityOptions.map((p) => (
+                <SelectItem key={p} value={p}>{priorityLabels[p]}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
           <Button variant="outline" onClick={generatePDF} className="gap-2">
             <FileDown className="w-4 h-4" /> PDF
           </Button>
@@ -183,9 +235,19 @@ export default function OrderDetailPage() {
                 <p className="text-sm text-graphite-400">Ordem de Serviço</p>
                 <h1 className="text-2xl font-bold text-emerald-450">#{order.number}</h1>
               </div>
-              <span className="px-3 py-1 rounded-full text-xs font-medium border bg-graphite-800 text-graphite-200 border-graphite-700">
-                {statusLabels[order.status]}
-              </span>
+              <div className="flex items-center gap-2">
+                <span className="px-3 py-1 rounded-full text-xs font-medium border bg-graphite-800 text-graphite-200 border-graphite-700">
+                  {statusLabels[order.status]}
+                </span>
+                <span
+                  className={cn(
+                    "text-xs px-2 py-1 rounded-full border font-medium",
+                    priorityColors[order.priority]
+                  )}
+                >
+                  {priorityLabels[order.priority]}
+                </span>
+              </div>
             </div>
 
             <div className="grid sm:grid-cols-2 gap-4">
@@ -197,7 +259,44 @@ export default function OrderDetailPage() {
 
             <div className="mt-5">
               <Label className="text-graphite-300 mb-1.5 block">Descrição do Problema</Label>
-              <Textarea value={order.description} readOnly className="bg-graphite-950" />
+              <Textarea
+                value={order.description}
+                onChange={(e) => handleDescriptionChange(e.target.value)}
+                className="bg-graphite-950 min-h-[100px]"
+              />
+            </div>
+          </section>
+
+          <section className="bg-graphite-900 border border-graphite-800 rounded-2xl p-6 shadow-card">
+            <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
+              <MessageSquare className="w-5 h-5 text-emerald-450" /> Trativa / Andamento do Atendimento
+            </h2>
+            <div className="space-y-3 mb-5">
+              <Textarea
+                value={newUpdate}
+                onChange={(e) => setNewUpdate(e.target.value)}
+                placeholder="Digite uma atualização de andamento do atendimento..."
+                className="bg-graphite-950 min-h-[80px]"
+              />
+              <Button onClick={handleAddUpdate} disabled={sendingUpdate || !newUpdate.trim()} className="gap-2">
+                <Clock className="w-4 h-4" /> {sendingUpdate ? "Salvando..." : "Adicionar Tratativa"}
+              </Button>
+            </div>
+
+            <div className="space-y-3 max-h-[400px] overflow-y-auto pr-1">
+              {updates.length === 0 ? (
+                <p className="text-sm text-graphite-500 text-center py-4">Nenhuma tratativa registrada ainda.</p>
+              ) : (
+                updates.map((u) => (
+                  <div key={u.id} className="bg-graphite-950 border border-graphite-800 rounded-xl p-4">
+                    <p className="text-sm whitespace-pre-line">{u.note}</p>
+                    <p className="text-xs text-graphite-500 mt-2 flex items-center gap-1">
+                      <Clock className="w-3.5 h-3.5" />
+                      {new Date(u.createdAt).toLocaleString("pt-BR")}
+                    </p>
+                  </div>
+                ))
+              )}
             </div>
           </section>
 

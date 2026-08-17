@@ -40,6 +40,7 @@ CREATE TABLE IF NOT EXISTS public.orders (
   client_id uuid REFERENCES public.clients(id) ON DELETE CASCADE,
   description text NOT NULL,
   status text NOT NULL DEFAULT 'pendente' CHECK (status IN ('pendente','em_orcamento','aprovado','recusado','em_execucao','finalizado')),
+  priority text NOT NULL DEFAULT 'media' CHECK (priority IN ('baixa','media','alta')),
   budget_status text DEFAULT 'pendente' CHECK (budget_status IN ('pendente','aprovado','recusado')),
   budget_approved_at timestamptz,
   budget_rejected_at timestamptz,

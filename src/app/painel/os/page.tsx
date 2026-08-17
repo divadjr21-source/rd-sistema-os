@@ -3,8 +3,8 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { getOrders, getClients, createOrderManual, deleteOrder, uploadMediaFiles } from "@/services/storage";
-import { OrderService, Client, OrderStatus } from "@/types";
-import { formatPhone, formatPhoneInput, statusLabels, statusColors } from "@/lib/utils";
+import { OrderService, Client, OrderStatus, OrderPriority } from "@/types";
+import { formatPhone, formatPhoneInput, statusLabels, statusColors, priorityLabels, priorityColors } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -25,7 +25,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Search, Eye, Trash2, Plus, Upload, X, AlertTriangle } from "lucide-react";
+import { Search, Eye, Trash2, Plus, Upload, X, AlertTriangle, Pencil } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const statusOptions: OrderStatus[] = [
@@ -36,6 +36,8 @@ const statusOptions: OrderStatus[] = [
   "em_execucao",
   "finalizado",
 ];
+
+const priorityOptions: OrderPriority[] = ["baixa", "media", "alta"];
 
 export default function OrdersListPage() {
   const [orders, setOrders] = useState<OrderService[]>([]);
@@ -55,8 +57,17 @@ export default function OrdersListPage() {
     address: "",
     description: "",
     status: "pendente" as OrderStatus,
+    priority: "media" as OrderPriority,
   });
   const [files, setFiles] = useState<{ file: File; preview: string; type: "image" | "video"; name: string }[]>([]);
+
+  const [editModalOpen, setEditModalOpen] = useState(false);
+  const [editingOrder, setEditingOrder] = useState<OrderService | null>(null);
+  const [editForm, setEditForm] = useState({
+    description: "",
+    status: "pendente" as OrderStatus,
+    priority: "media" as OrderPriority,
+  });
 
   useEffect(() => {
     refresh();
@@ -77,8 +88,38 @@ export default function OrdersListPage() {
       address: "",
       description: "",
       status: "pendente",
+      priority: "media",
     });
     setFiles([]);
+  };
+
+  const openEdit = (order: OrderService) => {
+    setEditingOrder(order);
+    setEditForm({
+      description: order.description,
+      status: order.status,
+      priority: order.priority,
+    });
+    setEditModalOpen(true);
+  };
+
+  const handleEditSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingOrder || submitting) return;
+    setSubmitting(true);
+    try {
+      const { updateOrderStatus, updateOrderPriority, updateOrderDescription } = await import("@/services/storage");
+      await Promise.all([
+        updateOrderDescription(editingOrder.id, editForm.description),
+        updateOrderStatus(editingOrder.id, editForm.status),
+        updateOrderPriority(editingOrder.id, editForm.priority),
+      ]);
+      await refresh();
+      setEditModalOpen(false);
+      setEditingOrder(null);
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const filtered = orders.filter((o) =>
@@ -131,6 +172,7 @@ export default function OrdersListPage() {
         client: clientData,
         description: form.description,
         status: form.status,
+        priority: form.priority,
         media: [],
       });
 
@@ -266,21 +308,39 @@ export default function OrdersListPage() {
                 />
               </div>
 
-              <div className="space-y-1.5">
-                <Label htmlFor="status">Status Inicial</Label>
-                <Select
-                  value={form.status}
-                  onValueChange={(v) => setForm({ ...form, status: v as OrderStatus })}
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {statusOptions.map((s) => (
-                      <SelectItem key={s} value={s}>{statusLabels[s]}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <Label htmlFor="status">Status Inicial</Label>
+                  <Select
+                    value={form.status}
+                    onValueChange={(v) => setForm({ ...form, status: v as OrderStatus })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {statusOptions.map((s) => (
+                        <SelectItem key={s} value={s}>{statusLabels[s]}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="priority">Prioridade</Label>
+                  <Select
+                    value={form.priority}
+                    onValueChange={(v) => setForm({ ...form, priority: v as OrderPriority })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {priorityOptions.map((p) => (
+                        <SelectItem key={p} value={p}>{priorityLabels[p]}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
 
               <div className="space-y-2">
@@ -351,6 +411,7 @@ export default function OrdersListPage() {
                 <th className="py-3 px-3 font-medium">Cliente</th>
                 <th className="py-3 px-3 font-medium">Telefone</th>
                 <th className="py-3 px-3 font-medium">Status</th>
+                <th className="py-3 px-3 font-medium">Prioridade</th>
                 <th className="py-3 px-3 font-medium">Abertura</th>
                 <th className="py-3 px-3 font-medium text-right">Ações</th>
               </tr>
@@ -371,6 +432,16 @@ export default function OrdersListPage() {
                       {statusLabels[order.status]}
                     </span>
                   </td>
+                  <td className="py-3 px-3">
+                    <span
+                      className={cn(
+                        "text-xs px-2 py-0.5 rounded-full border",
+                        priorityColors[order.priority]
+                      )}
+                    >
+                      {priorityLabels[order.priority]}
+                    </span>
+                  </td>
                   <td className="py-3 px-3 text-graphite-400">{new Date(order.createdAt).toLocaleDateString("pt-BR")}</td>
                   <td className="py-3 px-3 text-right">
                     <div className="flex items-center justify-end gap-3">
@@ -379,6 +450,13 @@ export default function OrdersListPage() {
                           <Eye className="w-4 h-4" /> Ver
                         </button>
                       </Link>
+                      <button
+                        onClick={() => openEdit(order)}
+                        className="inline-flex items-center gap-1 text-graphite-400 hover:text-emerald-450 transition"
+                        title="Editar O.S."
+                      >
+                        <Pencil className="w-4 h-4" />
+                      </button>
                       <button
                         onClick={() => confirmDelete(order)}
                         className="inline-flex items-center gap-1 text-danger hover:text-danger/80 transition"
@@ -392,7 +470,7 @@ export default function OrdersListPage() {
               ))}
               {filtered.length === 0 && (
                 <tr>
-                  <td colSpan={6} className="py-8 text-center text-graphite-500">
+                  <td colSpan={7} className="py-8 text-center text-graphite-500">
                     Nenhuma ordem de serviço encontrada.
                   </td>
                 </tr>
@@ -416,6 +494,66 @@ export default function OrdersListPage() {
             <Button variant="outline" onClick={() => setDeleteModalOpen(false)}>Cancelar</Button>
             <Button variant="destructive" onClick={handleDelete}>Excluir</Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={editModalOpen} onOpenChange={setEditModalOpen}>
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Editar O.S. #{editingOrder?.number}</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleEditSubmit} className="space-y-4 mt-2">
+            <div className="space-y-1.5">
+              <Label htmlFor="edit-description">Descrição do Problema / Serviço</Label>
+              <Textarea
+                id="edit-description"
+                value={editForm.description}
+                onChange={(e) => setEditForm({ ...editForm, description: e.target.value })}
+                placeholder="Descreva o serviço a ser realizado"
+                required
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <Label htmlFor="edit-status">Status</Label>
+                <Select
+                  value={editForm.status}
+                  onValueChange={(v) => setEditForm({ ...editForm, status: v as OrderStatus })}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {statusOptions.map((s) => (
+                      <SelectItem key={s} value={s}>{statusLabels[s]}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="edit-priority">Prioridade</Label>
+                <Select
+                  value={editForm.priority}
+                  onValueChange={(v) => setEditForm({ ...editForm, priority: v as OrderPriority })}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {priorityOptions.map((p) => (
+                      <SelectItem key={p} value={p}>{priorityLabels[p]}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => { setEditModalOpen(false); setEditingOrder(null); }}>Cancelar</Button>
+              <Button type="submit" disabled={submitting}>{submitting ? "Salvando..." : "Salvar Alterações"}</Button>
+            </DialogFooter>
+          </form>
         </DialogContent>
       </Dialog>
     </div>
