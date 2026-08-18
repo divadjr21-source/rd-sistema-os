@@ -7,7 +7,7 @@ import { getOrdersByMonth, getActiveContracts } from "@/services/storage";
 import { OrderService, Contract } from "@/types";
 import { formatCurrency } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import { ChevronLeft, ChevronRight, ClipboardList, CheckCircle, XCircle, TrendingUp, Receipt } from "lucide-react";
+import { ChevronLeft, ChevronRight, ClipboardList, CheckCircle, XCircle, TrendingUp, Receipt, Download } from "lucide-react";
 
 export default function RelatoriosPage() {
   const [currentDate, setCurrentDate] = useState(new Date());
@@ -31,6 +31,10 @@ export default function RelatoriosPage() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handlePrint = () => {
+    window.print();
   };
 
   const finalizados = useMemo(() => orders.filter((o) => o.status === "finalizado"), [orders]);
@@ -94,7 +98,18 @@ export default function RelatoriosPage() {
           <div className="animate-spin h-8 w-8 border-4 border-emerald-450 border-t-transparent rounded-full" />
         </div>
       ) : (
-        <>
+        <div id="relatorio-print" className="space-y-6">
+          <div className="print-header hidden print:block mb-6">
+            <h2 className="text-2xl font-bold">RD Solutions - Relatório Mensal</h2>
+            <p className="text-sm text-gray-600 capitalize">{format(currentDate, "MMMM yyyy", { locale: ptBR })}</p>
+          </div>
+
+          <div className="flex items-center justify-end print:hidden">
+            <Button type="button" onClick={handlePrint} className="gap-2">
+              <Download className="w-4 h-4" /> Exportar / Baixar PDF
+            </Button>
+          </div>
+
           <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <Card
               icon={ClipboardList}
@@ -191,7 +206,7 @@ export default function RelatoriosPage() {
               </div>
             )}
           </div>
-        </>
+        </div>
       )}
     </div>
   );

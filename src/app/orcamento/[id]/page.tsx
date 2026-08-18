@@ -12,13 +12,13 @@ import {
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { CheckCircle, XCircle, FileText, Package, Wrench, Calendar, Phone, MapPin, User, Shield, Printer, Building2 } from "lucide-react";
+import { CheckCircle, XCircle, FileText, Package, Wrench, Calendar, Phone, MapPin, User, Shield, Printer, Building2, Mail, Clock } from "lucide-react";
 
 export default function OrcamentoPublicoPage() {
   const params = useParams();
   const id = params.id as string;
   const [order, setOrder] = useState<OrderService | null>(null);
-  const [company, setCompany] = useState<{ name: string; address?: string; city?: string; whatsapp?: string; logo?: string }>({ name: "RD Solutions" });
+  const [company, setCompany] = useState<{ name: string; address?: string; city?: string; whatsapp?: string; email?: string; cnpj?: string; logo?: string }>({ name: "RD Solutions" });
   const [action, setAction] = useState<BudgetStatus | null>(null);
   const [reason, setReason] = useState("");
   const [done, setDone] = useState(false);
@@ -55,6 +55,9 @@ export default function OrcamentoPublicoPage() {
     setDone(true);
   };
 
+  const todayStr = new Date().toLocaleDateString("pt-BR");
+  const validityStr = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toLocaleDateString("pt-BR");
+
   if (!order) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background text-graphite-400">
@@ -88,50 +91,52 @@ export default function OrcamentoPublicoPage() {
 
   return (
     <div className="min-h-screen bg-background py-6 px-4 print:bg-white print:text-black">
-      <div className="max-w-4xl mx-auto space-y-6 print:space-y-4">
+      <div className="max-w-5xl mx-auto space-y-6 print:space-y-4">
         <div className="bg-graphite-900 border border-graphite-800 rounded-2xl p-6 shadow-card print:shadow-none print:border-black print:bg-white">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
-            <div className="flex items-center gap-3">
-              <div className="h-14 w-14 rounded-xl bg-emerald-450 flex items-center justify-center print:bg-emerald-600">
-                <Shield className="w-8 h-8 text-graphite-950 print:text-white" />
+          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 mb-6">
+            <div className="flex items-center gap-4">
+              <div className="h-16 w-16 rounded-xl bg-emerald-450 flex items-center justify-center print:bg-emerald-700">
+                <Shield className="w-9 h-9 text-graphite-950 print:text-white" />
               </div>
               <div>
                 <h1 className="text-2xl font-bold print:text-3xl">{company.name || "RD Solutions"}</h1>
-                <p className="text-sm text-graphite-400 print:text-gray-600 flex items-center gap-1">
-                  <Building2 className="w-3.5 h-3.5" />
-                  {company.address}{company.city ? `, ${company.city}` : ""}
+                <p className="text-xs text-graphite-400 print:text-gray-600">
+                  Segurança Eletrônica e Tecnologia
                 </p>
-                {company.whatsapp && (
-                  <p className="text-xs text-graphite-500 print:text-gray-600">WhatsApp: {formatPhone(company.whatsapp)}</p>
-                )}
               </div>
             </div>
-            <div className="text-left sm:text-right">
-              <p className="text-xs text-graphite-400 print:text-gray-600 uppercase tracking-wide">Orçamento de Serviço</p>
+            <div className="text-left lg:text-right">
+              <p className="text-xs text-graphite-400 print:text-gray-600 uppercase tracking-wide">Proposta Comercial</p>
               <p className="text-lg font-bold">O.S. #{order.number}</p>
-              <p className="text-xs text-graphite-400 print:text-gray-600">
-                Emissão: {new Date(order.createdAt).toLocaleDateString("pt-BR")}
-              </p>
+              <p className="text-xs text-graphite-400 print:text-gray-600">Emissão: {todayStr}</p>
+              <p className="text-xs text-graphite-400 print:text-gray-600">Validade: {validityStr}</p>
             </div>
           </div>
 
-          <div className="grid sm:grid-cols-2 gap-4 text-sm">
-            <Info icon={FileText} label="O.S." value={`#${order.number}`} />
-            <Info icon={User} label="Cliente" value={order.client.fullName} />
-            <Info icon={Phone} label="Telefone" value={formatPhone(order.client.phone)} />
-            <Info icon={MapPin} label="Endereço" value={order.client.address} />
-            <Info
-              icon={Calendar}
-              label="Abertura"
-              value={new Date(order.createdAt).toLocaleDateString("pt-BR")}
-            />
-            <Info icon={Calendar} label="Status do Orçamento" value={budgetStatusLabels[order.budgetStatus || "pendente"]} />
+          <div className="grid sm:grid-cols-2 gap-4 text-sm border-t border-graphite-800 print:border-gray-300 pt-5">
+            <Info icon={Building2} label="Endereço" value={`${company.address || ""}${company.city ? `, ${company.city}` : ""}`} />
+            <Info icon={Phone} label="Telefone" value={company.whatsapp ? formatPhone(company.whatsapp) : "-"} />
+            {company.cnpj && <Info icon={FileText} label="CNPJ" value={company.cnpj} />}
+            {company.email && <Info icon={Mail} label="E-mail" value={company.email} />}
           </div>
         </div>
 
         <div className="bg-graphite-900 border border-graphite-800 rounded-2xl p-6 shadow-card print:shadow-none print:border-black print:bg-white">
           <h2 className="text-lg font-semibold mb-4 flex items-center gap-2 print:text-xl">
-            <Package className="w-5 h-5 text-info" /> Equipamentos e Materiais
+            <User className="w-5 h-5 text-emerald-450" /> Dados do Cliente
+          </h2>
+          <div className="grid sm:grid-cols-2 gap-4 text-sm">
+            <Info icon={User} label="Cliente" value={order.client.fullName} />
+            <Info icon={Phone} label="Telefone" value={formatPhone(order.client.phone)} />
+            <Info icon={MapPin} label="Endereço" value={order.client.address} />
+            <Info icon={Calendar} label="Abertura da O.S." value={new Date(order.createdAt).toLocaleDateString("pt-BR")} />
+            <Info icon={FileText} label="Status do Orçamento" value={budgetStatusLabels[order.budgetStatus || "pendente"]} />
+          </div>
+        </div>
+
+        <div className="bg-graphite-900 border border-graphite-800 rounded-2xl p-6 shadow-card print:shadow-none print:border-black print:bg-white">
+          <h2 className="text-lg font-semibold mb-4 flex items-center gap-2 print:text-xl">
+            <Package className="w-5 h-5 text-info" /> Tabela 1 - Equipamentos e Materiais
           </h2>
           {materialItems.length === 0 ? (
             <p className="text-graphite-500 py-4 text-center print:text-gray-600">Nenhum material orçado.</p>
@@ -142,7 +147,7 @@ export default function OrcamentoPublicoPage() {
                   <tr className="text-left text-graphite-400 print:text-gray-700">
                     <th className="p-3 font-medium">Item</th>
                     <th className="p-3 font-medium text-center">Qtd.</th>
-                    <th className="p-3 font-medium text-right">Unitário</th>
+                    <th className="p-3 font-medium text-right">Valor Unit.</th>
                     <th className="p-3 font-medium text-right">Total</th>
                   </tr>
                 </thead>
@@ -160,13 +165,14 @@ export default function OrcamentoPublicoPage() {
             </div>
           )}
           <div className="mt-3 text-right text-sm text-graphite-400 print:text-gray-700">
-            Subtotal Materiais: <span className="font-semibold text-white print:text-black">{formatCurrency(materialSubtotal)}</span>
+            Subtotal Materiais:{" "}
+            <span className="font-semibold text-white print:text-black">{formatCurrency(materialSubtotal)}</span>
           </div>
         </div>
 
         <div className="bg-graphite-900 border border-graphite-800 rounded-2xl p-6 shadow-card print:shadow-none print:border-black print:bg-white">
           <h2 className="text-lg font-semibold mb-4 flex items-center gap-2 print:text-xl">
-            <Wrench className="w-5 h-5 text-warning" /> Serviços e Mão de Obra
+            <Wrench className="w-5 h-5 text-warning" /> Tabela 2 - Serviços e Mão de Obra
           </h2>
           {serviceItems.length === 0 ? (
             <p className="text-graphite-500 py-4 text-center print:text-gray-600">Nenhum serviço orçado.</p>
@@ -175,9 +181,9 @@ export default function OrcamentoPublicoPage() {
               <table className="w-full text-sm">
                 <thead className="bg-graphite-950 print:bg-gray-100">
                   <tr className="text-left text-graphite-400 print:text-gray-700">
-                    <th className="p-3 font-medium">Item</th>
+                    <th className="p-3 font-medium">Descrição</th>
                     <th className="p-3 font-medium text-center">Qtd.</th>
-                    <th className="p-3 font-medium text-right">Unitário</th>
+                    <th className="p-3 font-medium text-right">Valor Unit.</th>
                     <th className="p-3 font-medium text-right">Total</th>
                   </tr>
                 </thead>
@@ -195,46 +201,81 @@ export default function OrcamentoPublicoPage() {
             </div>
           )}
           <div className="mt-3 text-right text-sm text-graphite-400 print:text-gray-700">
-            Subtotal Serviços: <span className="font-semibold text-white print:text-black">{formatCurrency(serviceSubtotal)}</span>
+            Subtotal Serviços:{" "}
+            <span className="font-semibold text-white print:text-black">{formatCurrency(serviceSubtotal)}</span>
+          </div>
+        </div>
+
+        <div className="bg-slate-900 border border-emerald-450/30 rounded-2xl p-6 shadow-card print:shadow-none print:border-black print:bg-white">
+          <h2 className="text-lg font-semibold mb-4 flex items-center gap-2 print:text-xl">
+            <Clock className="w-5 h-5 text-emerald-450" /> Resumo Financeiro
+          </h2>
+          <div className="grid sm:grid-cols-3 gap-4">
+            <div className="bg-graphite-950 print:bg-gray-100 rounded-xl p-4 text-center">
+              <p className="text-sm text-graphite-400 print:text-gray-600">Subtotal Materiais</p>
+              <p className="text-xl font-bold text-info print:text-black">{formatCurrency(materialSubtotal)}</p>
+            </div>
+            <div className="bg-graphite-950 print:bg-gray-100 rounded-xl p-4 text-center">
+              <p className="text-sm text-graphite-400 print:text-gray-600">Subtotal Serviços</p>
+              <p className="text-xl font-bold text-warning print:text-black">{formatCurrency(serviceSubtotal)}</p>
+            </div>
+            <div className="bg-emerald-450/10 print:bg-gray-100 rounded-xl p-4 text-center border border-emerald-450/30">
+              <p className="text-sm text-emerald-450 print:text-gray-600">Total Geral</p>
+              <p className="text-3xl font-bold text-emerald-450 print:text-emerald-700">{formatCurrency(total)}</p>
+            </div>
           </div>
         </div>
 
         <div className="bg-graphite-900 border border-graphite-800 rounded-2xl p-6 shadow-card print:shadow-none print:border-black print:bg-white">
-          <div className="flex flex-col sm:flex-row items-stretch justify-between gap-6">
-            <div className="flex-1">
-              <h3 className="font-semibold mb-2 text-sm">Observações / Condições de Pagamento</h3>
-              <p className="text-sm text-graphite-400 print:text-gray-700 min-h-[80px] whitespace-pre-line bg-graphite-950 print:bg-transparent p-3 rounded-xl print:p-0 print:rounded-none">
-                {order.description || "Forma de pagamento a combinar. Orçamento válido conforme condições comerciais."}
+          <h2 className="text-lg font-semibold mb-4 flex items-center gap-2 print:text-xl">
+            <FileText className="w-5 h-5 text-emerald-450" /> Condições e Observações
+          </h2>
+          <div className="grid sm:grid-cols-2 gap-6">
+            <div className="space-y-3 text-sm text-graphite-400 print:text-gray-700">
+              <p className="whitespace-pre-line bg-graphite-950 print:bg-transparent p-3 rounded-xl">
+                {order.description || "Forma de pagamento a combinar."}
               </p>
             </div>
-            <div className="sm:w-72 bg-graphite-950 print:bg-gray-100 rounded-xl p-5 space-y-3">
-              <div className="flex justify-between text-sm text-graphite-400 print:text-gray-700">
-                <span>Subtotal Materiais</span>
-                <span>{formatCurrency(materialSubtotal)}</span>
+            <div className="space-y-3 text-sm">
+              <div className="flex justify-between border-b border-graphite-800 print:border-gray-300 pb-2">
+                <span className="text-graphite-400 print:text-gray-700">Prazo de entrega</span>
+                <span className="font-medium">A combinar</span>
               </div>
-              <div className="flex justify-between text-sm text-graphite-400 print:text-gray-700">
-                <span>Subtotal Serviços</span>
-                <span>{formatCurrency(serviceSubtotal)}</span>
+              <div className="flex justify-between border-b border-graphite-800 print:border-gray-300 pb-2">
+                <span className="text-graphite-400 print:text-gray-700">Forma de pagamento</span>
+                <span className="font-medium">Pix / Boleto</span>
               </div>
-              <div className="border-t border-graphite-800 print:border-gray-300 pt-3 flex justify-between items-center">
-                <span className="font-semibold">Total Geral</span>
-                <span className="text-2xl font-bold text-emerald-450 print:text-emerald-700">{formatCurrency(total)}</span>
+              <div className="flex justify-between border-b border-graphite-800 print:border-gray-300 pb-2">
+                <span className="text-graphite-400 print:text-gray-700">Garantia</span>
+                <span className="font-medium">90 dias</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-graphite-400 print:text-gray-700">Validade da proposta</span>
+                <span className="font-medium">{validityStr}</span>
               </div>
             </div>
           </div>
         </div>
 
-        <div className="grid sm:grid-cols-2 gap-6 print:mt-8">
-          <div className="text-center">
-            <div className="border-t border-graphite-700 print:border-black pt-4">
-              <p className="font-semibold">{company.name || "RD Solutions"}</p>
-              <p className="text-xs text-graphite-500 print:text-gray-600">Responsável Técnico</p>
+        <div className="bg-graphite-900 border border-graphite-800 rounded-2xl p-6 shadow-card print:shadow-none print:border-black print:bg-white print:break-inside-avoid">
+          <h2 className="text-lg font-semibold mb-4 flex items-center gap-2 print:text-xl">
+            <FileText className="w-5 h-5 text-emerald-450" /> Aceite e Assinaturas
+          </h2>
+          <p className="text-sm text-graphite-400 print:text-gray-700 mb-6">
+            Ao assinar este documento, o cliente declara estar de acordo com os valores, condições e especificações técnicas descritas nesta proposta.
+          </p>
+          <div className="grid sm:grid-cols-2 gap-6">
+            <div className="text-center">
+              <div className="border-t border-graphite-700 print:border-black pt-4">
+                <p className="font-semibold">{company.name || "RD Solutions"}</p>
+                <p className="text-xs text-graphite-500 print:text-gray-600">Responsável Técnico</p>
+              </div>
             </div>
-          </div>
-          <div className="text-center">
-            <div className="border-t border-graphite-700 print:border-black pt-4">
-              <p className="font-semibold">{order.client.fullName}</p>
-              <p className="text-xs text-graphite-500 print:text-gray-600">Aceite do Cliente</p>
+            <div className="text-center">
+              <div className="border-t border-graphite-700 print:border-black pt-4">
+                <p className="font-semibold">{order.client.fullName}</p>
+                <p className="text-xs text-graphite-500 print:text-gray-600">Cliente / Aceite</p>
+              </div>
             </div>
           </div>
         </div>

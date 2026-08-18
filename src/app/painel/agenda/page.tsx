@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,6 +11,7 @@ import {
   DialogHeader,
   DialogTitle,
   DialogFooter,
+  DialogDescription,
 } from "@/components/ui/dialog";
 import {
   Select,
@@ -22,17 +23,7 @@ import {
 import { getAppointments, getOrders, createAppointment, updateAppointment, deleteAppointment } from "@/services/storage";
 import { Appointment, OrderService, AppointmentStatus } from "@/types";
 import { formatPhone } from "@/lib/utils";
-import {
-  format,
-  startOfMonth,
-  endOfMonth,
-  eachDayOfInterval,
-  isSameMonth,
-  isSameDay,
-  addMonths,
-  subMonths,
-  parseISO,
-} from "date-fns";
+import { format, isSameMonth, isSameDay, addMonths, subMonths, getDay } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import {
   ChevronLeft,
@@ -47,6 +38,8 @@ import {
   Trash2,
   FileText,
   AlertTriangle,
+  List,
+  CalendarDays,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -64,11 +57,27 @@ const appointmentStatusColors: Record<AppointmentStatus, string> = {
   cancelado: "bg-danger/10 text-danger border-danger/30",
 };
 
+const WEEK_DAYS = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
+
+function toLocalNoon(date: Date) {
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate(), 12, 0, 0);
+}
+
+function parseLocalNoon(dateString: string) {
+  const [year, month, day] = dateString.split("T")[0].split("-").map(Number);
+  return new Date(year, month - 1, day, 12, 0, 0);
+}
+
+function localDateKey(date: Date) {
+  const d = toLocalNoon(date);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
 export default function AgendaPage() {
-  const [currentDate, setCurrentDate] = useState(new Date());
+  const [currentDate, setCurrentDate] = useState(() => toLocalNoon(new Date()));
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [orders, setOrders] = useState<OrderService[]>([]);
-  const [selectedDate, setSelectedDate] = useState<Date | null>(null);
+  const [selectedDate, setSelectedDate] = useState<Date | null>(() => toLocalNoon(new Date()));
   const [modalOpen, setModalOpen] = useState(false);
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -87,28 +96,46 @@ export default function AgendaPage() {
     status: "agendado" as AppointmentStatus,
   });
 
-  const selectedOrder = orders.find((o) => o.id === form.orderId);
+  const selectedOrder = useMemo(
+    () => orders.find((o) => o.id === form.orderId),
+    [orders, form.orderId]
+  );
 
-  const toLocalDate = (date: Date) => {
-    return new Date(date.getFullYear(), date.getMonth(), date.getDate(), 12, 0, 0);
-  };
+  const year = currentDate.getFullYear();
+  const month = currentDate.getMonth();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
 
-  const parseLocalDate = (dateString: string) => {
-    const [year, month, day] = dateString.split("-").map(Number);
-    return new Date(year, month - 1, day, 12, 0, 0);
-  };
+  const firstWeekday = useMemo(() => getDay(new Date(year, month, 1, 12, 0, 0)), [year, month]);
 
-  const monthStart = startOfMonth(currentDate);
-  const monthEnd = endOfMonth(currentDate);
-  const days = eachDayOfInterval({ start: monthStart, end: monthEnd }).map(toLocalDate);
+  const days = useMemo(() => {
+    const list: Date[] = [];
+    for (let d = 1; d <= daysInMonth; d++) {
+      list.push(new Date(year, month, d, 12, 0, 0));
+    }
+    return list;
+  }, [year, month, daysInMonth]);
+
+  const appointmentsByDate = useMemo(() => {
+    const map = new Map<string, Appointment[]>();
+    for (const a of appointments) {
+      if (!a.scheduledAt) continue;
+      const key = a.scheduledAt.split("T")[0];
+      const existing = map.get(key) || [];
+      existing.push(a);
+      map.set(key, existing);
+    }
+    return map;
+  }, [appointments]);
+
+  const monthRangeKey = useMemo(() => `${year}-${String(month + 1).padStart(2, "0")}`, [year, month]);
 
   useEffect(() => {
     refresh();
-  }, [currentDate]);
+  }, [monthRangeKey]);
 
   const refresh = async () => {
-    const start = format(monthStart, "yyyy-MM-dd");
-    const end = format(monthEnd, "yyyy-MM-dd");
+    const start = `${year}-${String(month + 1).padStart(2, "0")}-01`;
+    const end = `${year}-${String(month + 1).padStart(2, "0")}-${String(daysInMonth).padStart(2, "0")}`;
     const [a, o] = await Promise.all([getAppointments(start, end), getOrders()]);
     setAppointments(a);
     setOrders(o);
@@ -131,8 +158,8 @@ export default function AgendaPage() {
   const openNew = (date?: Date) => {
     resetForm();
     if (date) {
-      const localDate = toLocalDate(date);
-      setForm((prev) => ({ ...prev, scheduledDate: format(localDate, "yyyy-MM-dd") }));
+      const localDate = toLocalNoon(date);
+      setForm((prev) => ({ ...prev, scheduledDate: localDateKey(localDate) }));
       setSelectedDate(localDate);
     }
     setModalOpen(true);
@@ -140,12 +167,14 @@ export default function AgendaPage() {
 
   const openEdit = (appointment: Appointment) => {
     setEditingId(appointment.id);
+    const localDate = appointment.scheduledAt ? parseLocalNoon(appointment.scheduledAt) : new Date();
+    const time = appointment.scheduledAt ? appointment.scheduledAt.split("T")[1]?.slice(0, 5) || "" : "";
     setForm({
       orderId: appointment.orderId || "",
       clientId: appointment.clientId || appointment.order?.clientId || "",
       title: appointment.title,
-      scheduledDate: appointment.scheduledAt ? format(parseLocalDate(appointment.scheduledAt), "yyyy-MM-dd") : "",
-      scheduledTime: appointment.scheduledAt ? format(parseLocalDate(appointment.scheduledAt), "HH:mm") : "",
+      scheduledDate: localDateKey(localDate),
+      scheduledTime: time,
       technician: appointment.technician,
       notes: appointment.notes || "",
       status: appointment.status,
@@ -161,7 +190,7 @@ export default function AgendaPage() {
     try {
       const scheduledAt = form.scheduledTime
         ? `${form.scheduledDate}T${form.scheduledTime}:00`
-        : `${form.scheduledDate}T00:00:00`;
+        : `${form.scheduledDate}T12:00:00`;
 
       const orderId = form.orderId || null;
       const clientId = form.clientId || selectedOrder?.clientId || null;
@@ -204,12 +233,7 @@ export default function AgendaPage() {
     setAppointmentToDelete(null);
   };
 
-  const getAppointmentsForDay = (day: Date) =>
-    appointments.filter((a) => {
-      if (!a.scheduledAt) return false;
-      const scheduledLocal = parseLocalDate(a.scheduledAt.split("T")[0]);
-      return isSameDay(scheduledLocal, day);
-    });
+  const getAppointmentsForDay = (day: Date) => appointmentsByDate.get(localDateKey(day)) || [];
 
   const selectedDateAppointments = selectedDate ? getAppointmentsForDay(selectedDate) : [];
 
@@ -221,117 +245,184 @@ export default function AgendaPage() {
           <p className="text-graphite-400">Calendário de agendamentos e visitas técnicas</p>
         </div>
         <div className="flex items-center gap-2">
-          <Button variant={viewMode === "calendar" ? "default" : "outline"} size="sm" onClick={() => setViewMode("calendar")}>Calendário</Button>
-          <Button variant={viewMode === "list" ? "default" : "outline"} size="sm" onClick={() => setViewMode("list")}>Lista</Button>
-          <Button className="gap-2" size="sm" onClick={() => openNew()}>
+          <Button
+            type="button"
+            variant={viewMode === "calendar" ? "default" : "outline"}
+            size="sm"
+            onClick={() => setViewMode("calendar")}
+            className="gap-2"
+          >
+            <CalendarDays className="w-4 h-4" /> Calendário
+          </Button>
+          <Button
+            type="button"
+            variant={viewMode === "list" ? "default" : "outline"}
+            size="sm"
+            onClick={() => setViewMode("list")}
+            className="gap-2"
+          >
+            <List className="w-4 h-4" /> Lista
+          </Button>
+          <Button type="button" className="gap-2" size="sm" onClick={() => openNew()}>
             <Plus className="w-4 h-4" /> Agendar
           </Button>
         </div>
       </div>
 
       {viewMode === "calendar" ? (
-        <div className="bg-graphite-900 border border-graphite-800 rounded-2xl p-5 shadow-card">
-          <div className="flex items-center justify-between mb-5">
-            <Button type="button" variant="ghost" size="icon" onClick={() => setCurrentDate(subMonths(currentDate, 1))}>
-              <ChevronLeft className="w-5 h-5" />
-            </Button>
-            <h2 className="text-lg font-semibold capitalize">{format(currentDate, "MMMM yyyy", { locale: ptBR })}</h2>
-            <Button type="button" variant="ghost" size="icon" onClick={() => setCurrentDate(addMonths(currentDate, 1))}>
-              <ChevronRight className="w-5 h-5" />
-            </Button>
-          </div>
+        <div className="grid lg:grid-cols-3 gap-6">
+          <div className="lg:col-span-2 bg-graphite-900 border border-graphite-800 rounded-2xl p-5 shadow-card">
+            <div className="flex items-center justify-between mb-5">
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                onClick={() => setCurrentDate(toLocalNoon(subMonths(currentDate, 1)))}
+              >
+                <ChevronLeft className="w-5 h-5" />
+              </Button>
+              <h2 className="text-lg font-semibold capitalize">
+                {format(currentDate, "MMMM yyyy", { locale: ptBR })}
+              </h2>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                onClick={() => setCurrentDate(toLocalNoon(addMonths(currentDate, 1)))}
+              >
+                <ChevronRight className="w-5 h-5" />
+              </Button>
+            </div>
 
-          <div className="grid grid-cols-7 gap-1 text-center text-sm text-graphite-400 mb-2">
-            {["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"].map((d) => (
-              <div key={d} className="py-2">{d}</div>
-            ))}
-          </div>
+            <div className="grid grid-cols-7 gap-1 text-center text-sm text-graphite-400 mb-2">
+              {WEEK_DAYS.map((d) => (
+                <div key={d} className="py-2 font-medium">
+                  {d}
+                </div>
+              ))}
+            </div>
 
-          <div className="grid grid-cols-7 gap-1">
-            {days.map((day) => {
-              const dayAppointments = getAppointmentsForDay(day);
-              const isSelected = selectedDate ? isSameDay(day, selectedDate) : false;
-              return (
-                <button
-                  key={day.toISOString()}
-                  type="button"
-                  onClick={() => {
-                    setSelectedDate(day);
-                    if (dayAppointments.length === 0) openNew(day);
-                  }}
-                  className={cn(
-                    "min-h-[80px] p-2 rounded-xl border text-left transition flex flex-col gap-1",
-                    !isSameMonth(day, currentDate) && "opacity-40",
-                    isSelected
-                      ? "border-emerald-450 bg-emerald-450/10"
-                      : "border-graphite-800 bg-graphite-950 hover:border-graphite-700"
-                  )}
-                >
-                  <span className={cn("text-sm font-medium", isSelected && "text-emerald-450")}>
-                    {format(day, "d")}
-                  </span>
-                  {dayAppointments.slice(0, 2).map((a) => (
-                    <div
-                      key={a.id}
+            <div className="grid grid-cols-7 gap-1">
+              {Array.from({ length: firstWeekday }).map((_, i) => (
+                <div key={`empty-${i}`} className="min-h-[100px]" />
+              ))}
+              {days.map((day) => {
+                const dayAppointments = getAppointmentsForDay(day);
+                const isSelected = selectedDate ? isSameDay(day, selectedDate) : false;
+                return (
+                  <button
+                    key={localDateKey(day)}
+                    type="button"
+                    onClick={() => {
+                      setSelectedDate(day);
+                      if (dayAppointments.length === 0) openNew(day);
+                    }}
+                    className={cn(
+                      "min-h-[100px] p-2 rounded-xl border text-left transition flex flex-col gap-1",
+                      !isSameMonth(day, currentDate) && "opacity-40",
+                      isSelected
+                        ? "border-emerald-450 bg-emerald-450/10"
+                        : "border-graphite-800 bg-graphite-950 hover:border-graphite-700"
+                    )}
+                  >
+                    <span
                       className={cn(
-                        "text-[10px] px-1.5 py-0.5 rounded truncate",
-                        appointmentStatusColors[a.status]
+                        "text-sm font-medium",
+                        isSelected && "text-emerald-450"
                       )}
                     >
-                      {a.scheduledAt ? format(parseISO(a.scheduledAt), "HH:mm") : ""} {a.title}
-                    </div>
-                  ))}
-                  {dayAppointments.length > 2 && (
-                    <span className="text-[10px] text-graphite-500">+{dayAppointments.length - 2} mais</span>
-                  )}
-                </button>
-              );
-            })}
+                      {format(day, "d")}
+                    </span>
+                    {dayAppointments.slice(0, 2).map((a) => (
+                      <div
+                        key={a.id}
+                        className={cn(
+                          "text-[10px] px-1.5 py-0.5 rounded truncate",
+                          appointmentStatusColors[a.status]
+                        )}
+                      >
+                        {a.scheduledAt ? a.scheduledAt.split("T")[1]?.slice(0, 5) : ""} {a.title}
+                      </div>
+                    ))}
+                    {dayAppointments.length > 2 && (
+                      <span className="text-[10px] text-graphite-500">+{dayAppointments.length - 2} mais</span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
           </div>
 
-          {selectedDate && selectedDateAppointments.length > 0 && (
-            <div className="mt-6 border-t border-graphite-800 pt-5">
-              <div className="flex items-center justify-between mb-3">
-                <h3 className="font-semibold">
-                  Visitas do dia {format(selectedDate, "dd/MM/yyyy")}
-                </h3>
+          <div className="bg-graphite-900 border border-graphite-800 rounded-2xl p-5 shadow-card">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-semibold">
+                {selectedDate ? (
+                  <>
+                    Visitas de {" "}
+                    <span className="text-emerald-450">{format(selectedDate, "dd/MM/yyyy")}</span>
+                  </>
+                ) : (
+                  "Selecione um dia"
+                )}
+              </h3>
+              {selectedDate && (
                 <Button type="button" size="sm" variant="outline" onClick={() => openNew(selectedDate)}>
                   + Agendar
                 </Button>
-              </div>
-              <div className="space-y-2">
-                {selectedDateAppointments.map((a) => (
-                  <AppointmentRow key={a.id} appointment={a} onEdit={openEdit} onDelete={confirmDelete} />
-                ))}
-              </div>
+              )}
             </div>
-          )}
+
+            <div className="space-y-3">
+              {selectedDateAppointments.length === 0 ? (
+                <p className="text-sm text-graphite-500 text-center py-8">
+                  Nenhuma visita agendada para este dia.
+                </p>
+              ) : (
+                selectedDateAppointments.map((a) => (
+                  <AppointmentRow
+                    key={a.id}
+                    appointment={a}
+                    onEdit={openEdit}
+                    onDelete={confirmDelete}
+                  />
+                ))
+              )}
+            </div>
+          </div>
         </div>
       ) : (
         <div className="bg-graphite-900 border border-graphite-800 rounded-2xl p-5 shadow-card">
-          <div className="space-y-2">
+          <div className="space-y-3">
             {appointments.length === 0 && (
               <p className="text-center text-graphite-500 py-8">Nenhum agendamento encontrado.</p>
             )}
             {appointments.map((a) => (
-              <AppointmentRow key={a.id} appointment={a} onEdit={openEdit} onDelete={confirmDelete} />
+              <AppointmentRow
+                key={a.id}
+                appointment={a}
+                onEdit={openEdit}
+                onDelete={confirmDelete}
+              />
             ))}
           </div>
         </div>
       )}
 
       <Dialog open={modalOpen} onOpenChange={setModalOpen}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{editingId ? "Editar Agendamento" : "Novo Agendamento"}</DialogTitle>
           </DialogHeader>
           <form onSubmit={handleSubmit} className="space-y-4 mt-2">
             <div className="space-y-1.5">
               <Label>Vincular a O.S. (opcional)</Label>
-              <Select value={form.orderId} onValueChange={(v) => {
-                const order = orders.find((o) => o.id === v);
-                setForm({ ...form, orderId: v, clientId: order ? order.clientId : "" });
-              }}>
+              <Select
+                value={form.orderId}
+                onValueChange={(v) => {
+                  const order = orders.find((o) => o.id === v);
+                  setForm({ ...form, orderId: v, clientId: order ? order.clientId : "" });
+                }}
+              >
                 <SelectTrigger>
                   <SelectValue placeholder="Selecione uma O.S." />
                 </SelectTrigger>
@@ -420,7 +511,14 @@ export default function AgendaPage() {
             </div>
 
             <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => { setModalOpen(false); resetForm(); }}>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  setModalOpen(false);
+                  resetForm();
+                }}
+              >
                 Cancelar
               </Button>
               <Button type="submit" disabled={submitting}>
@@ -437,13 +535,18 @@ export default function AgendaPage() {
             <DialogTitle className="flex items-center gap-2">
               <AlertTriangle className="w-5 h-5 text-danger" /> Excluir Agendamento
             </DialogTitle>
+            <DialogDescription>
+              Tem certeza que deseja excluir o agendamento{" "}
+              <strong>{appointmentToDelete?.title}</strong>?
+            </DialogDescription>
           </DialogHeader>
-          <p className="text-sm text-graphite-400">
-            Tem certeza que deseja excluir o agendamento <strong>{appointmentToDelete?.title}</strong>?
-          </p>
           <DialogFooter className="mt-4">
-            <Button type="button" variant="outline" onClick={() => setDeleteModalOpen(false)}>Cancelar</Button>
-            <Button type="button" variant="destructive" onClick={handleDelete}>Excluir</Button>
+            <Button type="button" variant="outline" onClick={() => setDeleteModalOpen(false)}>
+              Cancelar
+            </Button>
+            <Button type="button" variant="destructive" onClick={handleDelete}>
+              Excluir
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -460,10 +563,21 @@ function AppointmentRow({
   onEdit: (a: Appointment) => void;
   onDelete: (a: Appointment) => void;
 }) {
+  const dateLabel = useMemo(() => {
+    if (!appointment.scheduledAt) return "";
+    const local = parseLocalNoon(appointment.scheduledAt);
+    return format(local, "dd/MM/yyyy");
+  }, [appointment.scheduledAt]);
+
+  const timeLabel = useMemo(() => {
+    if (!appointment.scheduledAt) return "";
+    return appointment.scheduledAt.split("T")[1]?.slice(0, 5) || "";
+  }, [appointment.scheduledAt]);
+
   return (
-    <div className="bg-graphite-950 border border-graphite-800 rounded-xl p-4 flex items-start justify-between">
-      <div className="space-y-1">
-        <div className="flex items-center gap-2">
+    <div className="bg-graphite-950 border border-graphite-800 rounded-xl p-4 flex items-start justify-between gap-3">
+      <div className="space-y-1 min-w-0">
+        <div className="flex items-center gap-2 flex-wrap">
           <span
             className={cn(
               "text-xs px-2 py-0.5 rounded-full border",
@@ -472,16 +586,15 @@ function AppointmentRow({
           >
             {appointmentStatusLabels[appointment.status]}
           </span>
-          <p className="font-medium">{appointment.title}</p>
+          <p className="font-medium truncate">{appointment.title}</p>
         </div>
         <div className="flex flex-wrap gap-3 text-sm text-graphite-400">
           <span className="flex items-center gap-1">
-            <Calendar className="w-3.5 h-3.5 text-emerald-450" />
-            {appointment.scheduledAt ? format(parseISO(appointment.scheduledAt), "dd/MM/yyyy") : ""}
+            <Calendar className="w-3.5 h-3.5 text-emerald-450" /> {dateLabel}
           </span>
-          {appointment.scheduledAt && (
+          {timeLabel && (
             <span className="flex items-center gap-1">
-              <Clock className="w-3.5 h-3.5 text-emerald-450" /> {format(parseISO(appointment.scheduledAt), "HH:mm")}
+              <Clock className="w-3.5 h-3.5 text-emerald-450" /> {timeLabel}
             </span>
           )}
           <span className="flex items-center gap-1">
@@ -509,11 +622,19 @@ function AppointmentRow({
           </p>
         )}
       </div>
-      <div className="flex gap-1">
-        <button onClick={() => onEdit(appointment)} className="p-2 text-graphite-400 hover:text-emerald-450">
+      <div className="flex gap-1 shrink-0">
+        <button
+          type="button"
+          onClick={() => onEdit(appointment)}
+          className="p-2 text-graphite-400 hover:text-emerald-450"
+        >
           <Pencil className="w-4 h-4" />
         </button>
-        <button onClick={() => onDelete(appointment)} className="p-2 text-graphite-400 hover:text-danger">
+        <button
+          type="button"
+          onClick={() => onDelete(appointment)}
+          className="p-2 text-graphite-400 hover:text-danger"
+        >
           <Trash2 className="w-4 h-4" />
         </button>
       </div>
