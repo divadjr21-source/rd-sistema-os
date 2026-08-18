@@ -90,7 +90,12 @@ export default function AgendaPage() {
   const selectedOrder = orders.find((o) => o.id === form.orderId);
 
   const toLocalDate = (date: Date) => {
-    return new Date(date.getFullYear(), date.getMonth(), date.getDate());
+    return new Date(date.getFullYear(), date.getMonth(), date.getDate(), 12, 0, 0);
+  };
+
+  const parseLocalDate = (dateString: string) => {
+    const [year, month, day] = dateString.split("-").map(Number);
+    return new Date(year, month - 1, day, 12, 0, 0);
   };
 
   const monthStart = startOfMonth(currentDate);
@@ -139,8 +144,8 @@ export default function AgendaPage() {
       orderId: appointment.orderId || "",
       clientId: appointment.clientId || appointment.order?.clientId || "",
       title: appointment.title,
-      scheduledDate: appointment.scheduledAt ? format(parseISO(appointment.scheduledAt), "yyyy-MM-dd") : "",
-      scheduledTime: appointment.scheduledAt ? format(parseISO(appointment.scheduledAt), "HH:mm") : "",
+      scheduledDate: appointment.scheduledAt ? format(parseLocalDate(appointment.scheduledAt), "yyyy-MM-dd") : "",
+      scheduledTime: appointment.scheduledAt ? format(parseLocalDate(appointment.scheduledAt), "HH:mm") : "",
       technician: appointment.technician,
       notes: appointment.notes || "",
       status: appointment.status,
@@ -202,8 +207,7 @@ export default function AgendaPage() {
   const getAppointmentsForDay = (day: Date) =>
     appointments.filter((a) => {
       if (!a.scheduledAt) return false;
-      const [year, month, date] = a.scheduledAt.split("T")[0].split("-").map(Number);
-      const scheduledLocal = new Date(year, month - 1, date);
+      const scheduledLocal = parseLocalDate(a.scheduledAt.split("T")[0]);
       return isSameDay(scheduledLocal, day);
     });
 

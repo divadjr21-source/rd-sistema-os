@@ -205,7 +205,7 @@ RETURNS trigger AS $$
 BEGIN
   IF OLD.status IS DISTINCT FROM NEW.status THEN
     INSERT INTO public.order_status_history (order_id, status, note)
-    VALUES (NEW.id, NEW.status, COALESCE(NEW.budget_rejection_reason, 'Status atualizado'));
+    VALUES (NEW.id, NEW.status, COALESCE(NEW.budget_rejection_reason, 'log_status'));
   END IF;
   RETURN NEW;
 END;
@@ -222,7 +222,7 @@ CREATE OR REPLACE FUNCTION public.log_order_status_creation()
 RETURNS trigger AS $$
 BEGIN
   INSERT INTO public.order_status_history (order_id, status, note)
-  VALUES (NEW.id, NEW.status, 'Chamado aberto');
+  VALUES (NEW.id, NEW.status, 'log_status');
   RETURN NEW;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;

@@ -361,6 +361,26 @@ export async function getOrders(): Promise<OrderService[]> {
   return (data || []).map(mapOrder);
 }
 
+export async function getOrdersByMonth(year: number, month: number): Promise<OrderService[]> {
+  const start = new Date(year, month - 1, 1).toISOString();
+  const end = new Date(year, month, 0, 23, 59, 59, 999).toISOString();
+  const { data, error } = await supabase
+    .from("orders")
+    .select(
+      `
+      *,
+      clients(*),
+      order_media(*),
+      budget_items(*)
+    `
+    )
+    .gte("created_at", start)
+    .lte("created_at", end)
+    .order("created_at", { ascending: false });
+  if (error) throw error;
+  return (data || []).map(mapOrder);
+}
+
 export async function getOrderById(id: string): Promise<OrderService | undefined> {
   const { data, error } = await supabase
     .from("orders")
@@ -568,6 +588,7 @@ export async function getOrderUpdates(orderId: string): Promise<{ id: string; no
     .from("order_status_history")
     .select("id, note, created_at")
     .eq("order_id", orderId)
+    .neq("note", "log_status")
     .order("created_at", { ascending: false });
   if (error) throw error;
   return (data || []).map((row) => ({
@@ -719,6 +740,16 @@ export async function getContracts(): Promise<Contract[]> {
   const { data, error } = await supabase
     .from("contracts")
     .select("*, clients(*)")
+    .order("created_at", { ascending: false });
+  if (error) throw error;
+  return (data || []).map(mapContract);
+}
+
+export async function getActiveContracts(): Promise<Contract[]> {
+  const { data, error } = await supabase
+    .from("contracts")
+    .select("*, clients(*)")
+    .eq("active", true)
     .order("created_at", { ascending: false });
   if (error) throw error;
   return (data || []).map(mapContract);

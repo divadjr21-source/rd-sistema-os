@@ -2,9 +2,9 @@
 
 import { useEffect, useState, useMemo } from "react";
 import Link from "next/link";
-import { getOrders, getPendingInvoices, markInvoiceAsSent } from "@/services/storage";
+import { getOrders, getPendingInvoices, markInvoiceAsSent, getAppointments } from "@/services/storage";
 import { OrderService, OrderStatus } from "@/types";
-import { formatCurrency, statusLabels, statusColors } from "@/lib/utils";
+import { formatCurrency, statusLabels, statusColors, priorityLabels, priorityColors } from "@/lib/utils";
 import {
   ClipboardList,
   DollarSign,
@@ -15,9 +15,13 @@ import {
   FileText,
   Send,
   AlertCircle,
+  Calendar,
+  Bell,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { isSameDay, isBefore, startOfDay, addDays, format } from "date-fns";
+import { ptBR } from "date-fns/locale";
 
 const columns: { status: OrderStatus; label: string }[] = [
   { status: "pendente", label: "Pendente" },
@@ -32,6 +36,7 @@ export default function DashboardPage() {
   const [pendingInvoices, setPendingInvoices] = useState<
     { contract: { id: string; title: string; client: { fullName: string }; monthlyValue: number }; invoice: { sentAt?: string } | null; nfIssueDay: number }[]
   >([]);
+  const [appointments, setAppointments] = useState<{ id: string; title: string; scheduledAt: string; client?: { fullName: string } }[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
   const [currentMonth] = useState(new Date());
@@ -44,9 +49,10 @@ export default function DashboardPage() {
         const month = currentMonth.getMonth() + 1;
         const year = currentMonth.getFullYear();
 
-        const [ordersData, invoicesData] = await Promise.all([
+        const [ordersData, invoicesData, appointmentsData] = await Promise.all([
           getOrders(),
           getPendingInvoices(month, year).catch(() => []),
+          getAppointments().catch(() => []),
         ]);
 
         setOrders(ordersData || []);
@@ -57,11 +63,20 @@ export default function DashboardPage() {
             nfIssueDay: i.contract.nfIssueDay,
           }))
         );
+        setAppointments(
+          (appointmentsData || []).map((a) => ({
+            id: a.id,
+            title: a.title,
+            scheduledAt: a.scheduledAt,
+            client: a.client || a.order?.client,
+          }))
+        );
       } catch (error) {
         console.error("Erro ao carregar dashboard:", error);
         setLoadError(true);
         setOrders([]);
         setPendingInvoices([]);
+        setAppointments([]);
       } finally {
         setLoading(false);
       }
@@ -88,8 +103,42 @@ export default function DashboardPage() {
     }
   };
 
-  const today = new Date().toISOString().slice(0, 10);
-  const todayCount = orders.filter((o) => o.createdAt.slice(0, 10) === today).length;
+  const today = new Date();
+  const todayStr = format(today, "yyyy-MM-dd");
+  const todayCount = orders.filter((o) => o.createdAt.slice(0, 10) === todayStr).length;
+
+  const currentDay = today.getDate();
+
+  const vencendoHoje = pendingInvoices.filter((p) => !p.invoice?.sentAt && p.nfIssueDay === currentDay);
+  const vencendoProximos3 = pendingInvoices.filter((p) => {
+    if (p.invoice?.sentAt) return false;
+    const diasRestantes = p.nfIssueDay - currentDay;
+    return diasRestantes > 0 && diasRestantes <= 3;
+  });
+  const vencidas = pendingInvoices.filter((p) => {
+    if (p.invoice?.sentAt) return false;
+    return p.nfIssueDay < currentDay;
+  });
+
+  const appointmentsToday = appointments.filter((a) => {
+    if (!a.scheduledAt) return false;
+    const [year, month, day] = a.scheduledAt.split("T")[0].split("-").map(Number);
+    const scheduledLocal = new Date(year, month - 1, day, 12, 0, 0);
+    return isSameDay(scheduledLocal, today);
+  });
+
+  const appointmentsUpcoming = appointments.filter((a) => {
+    if (!a.scheduledAt) return false;
+    const [year, month, day] = a.scheduledAt.split("T")[0].split("-").map(Number);
+    const scheduledLocal = new Date(year, month - 1, day, 12, 0, 0);
+    return isBefore(startOfDay(today), startOfDay(scheduledLocal)) || isSameDay(scheduledLocal, addDays(today, 1)) || isSameDay(scheduledLocal, addDays(today, 2)) || isSameDay(scheduledLocal, addDays(today, 3));
+  }).filter((a) => !appointmentsToday.some((t) => t.id === a.id));
+
+  const formatDateTime = (iso: string) => {
+    const [year, month, day] = iso.split("T")[0].split("-").map(Number);
+    const d = new Date(year, month - 1, day, 12, 0, 0);
+    return format(d, "dd/MM/yyyy", { locale: ptBR });
+  };
 
   const monthlyRevenue = useMemo(() => {
     return orders
@@ -99,10 +148,6 @@ export default function DashboardPage() {
         return acc + total;
       }, 0);
   }, [orders]);
-
-  const currentDay = new Date().getDate();
-  const overdueInvoices = pendingInvoices.filter((p) => !p.invoice?.sentAt && p.nfIssueDay <= currentDay);
-  const upcomingInvoices = pendingInvoices.filter((p) => !p.invoice?.sentAt && p.nfIssueDay > currentDay);
 
   if (loading) {
     return (
@@ -151,12 +196,12 @@ export default function DashboardPage() {
         <Card icon={CheckCircle} label="Finalizados" value={orders.filter((o) => o.status === "finalizado").length.toString()} />
       </div>
 
-      {(overdueInvoices.length > 0 || upcomingInvoices.length > 0) && (
+      {(vencendoHoje.length > 0 || vencendoProximos3.length > 0 || vencidas.length > 0) && (
         <div className="bg-graphite-900 border border-graphite-800 rounded-2xl p-5 shadow-card">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
-              <FileText className="w-5 h-5 text-emerald-450" />
-              <h2 className="text-lg font-semibold">Notas Fiscais do Mês</h2>
+              <Bell className="w-5 h-5 text-emerald-450" />
+              <h2 className="text-lg font-semibold">Alertas de Notas Fiscais</h2>
             </div>
             <span className="text-sm text-graphite-400">
               {currentMonth.toLocaleDateString("pt-BR", { month: "long", year: "numeric" })}
@@ -164,23 +209,78 @@ export default function DashboardPage() {
           </div>
 
           <div className="space-y-3">
-            {overdueInvoices.map((p) => (
+            {vencendoHoje.map((p) => (
               <InvoiceAlertRow
-                key={p.contract.id}
+                key={`hoje-${p.contract.id}`}
                 contract={p.contract}
                 invoiceDay={p.nfIssueDay}
-                overdue
+                alertType="hoje"
                 onMarkSent={() => handleMarkSent(p.contract.id, p.contract.monthlyValue)}
               />
             ))}
-            {upcomingInvoices.map((p) => (
+            {vencendoProximos3.map((p) => (
               <InvoiceAlertRow
-                key={p.contract.id}
+                key={`prox-${p.contract.id}`}
                 contract={p.contract}
                 invoiceDay={p.nfIssueDay}
+                alertType="proximo"
                 onMarkSent={() => handleMarkSent(p.contract.id, p.contract.monthlyValue)}
               />
             ))}
+            {vencidas.map((p) => (
+              <InvoiceAlertRow
+                key={`atr-${p.contract.id}`}
+                contract={p.contract}
+                invoiceDay={p.nfIssueDay}
+                alertType="atrasada"
+                onMarkSent={() => handleMarkSent(p.contract.id, p.contract.monthlyValue)}
+              />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {(appointmentsToday.length > 0 || appointmentsUpcoming.length > 0) && (
+        <div className="bg-graphite-900 border border-graphite-800 rounded-2xl p-5 shadow-card">
+          <div className="flex items-center gap-2 mb-4">
+            <Calendar className="w-5 h-5 text-emerald-450" />
+            <h2 className="text-lg font-semibold">Compromissos e Visitas Técnicas</h2>
+          </div>
+
+          <div className="grid md:grid-cols-2 gap-4">
+            <div className="space-y-3">
+              <h3 className="text-sm font-medium text-graphite-300">Hoje</h3>
+              {appointmentsToday.length === 0 ? (
+                <p className="text-sm text-graphite-500">Nenhum compromisso para hoje.</p>
+              ) : (
+                appointmentsToday.map((a) => (
+                  <Link key={a.id} href={`/painel/agenda`}>
+                    <div className="bg-graphite-950 border border-graphite-800 rounded-xl p-3 hover:border-emerald-450/40 transition">
+                      <p className="font-medium text-sm">{a.title}</p>
+                      {a.client && <p className="text-xs text-graphite-400">{a.client.fullName}</p>}
+                      <p className="text-xs text-emerald-450 mt-1">{formatDateTime(a.scheduledAt)}</p>
+                    </div>
+                  </Link>
+                ))
+              )}
+            </div>
+
+            <div className="space-y-3">
+              <h3 className="text-sm font-medium text-graphite-300">Próximos 3 dias</h3>
+              {appointmentsUpcoming.length === 0 ? (
+                <p className="text-sm text-graphite-500">Nenhum compromisso nos próximos dias.</p>
+              ) : (
+                appointmentsUpcoming.slice(0, 5).map((a) => (
+                  <Link key={a.id} href={`/painel/agenda`}>
+                    <div className="bg-graphite-950 border border-graphite-800 rounded-xl p-3 hover:border-emerald-450/40 transition">
+                      <p className="font-medium text-sm">{a.title}</p>
+                      {a.client && <p className="text-xs text-graphite-400">{a.client.fullName}</p>}
+                      <p className="text-xs text-emerald-450 mt-1">{formatDateTime(a.scheduledAt)}</p>
+                    </div>
+                  </Link>
+                ))
+              )}
+            </div>
           </div>
         </div>
       )}
@@ -209,14 +309,24 @@ export default function DashboardPage() {
                           <p className="font-medium text-sm truncate">{order.client.fullName}</p>
                           <p className="text-xs text-graphite-400 truncate">{order.client.phone}</p>
                           <p className="text-xs text-graphite-500 mt-1 line-clamp-2">{order.description}</p>
-                          <span
-                            className={cn(
-                              "inline-block mt-2 text-[10px] px-2 py-0.5 rounded-full border",
-                              statusColors[order.status]
-                            )}
-                          >
-                            {statusLabels[order.status]}
-                          </span>
+                          <div className="flex flex-wrap gap-1.5 mt-2">
+                            <span
+                              className={cn(
+                                "inline-block text-[10px] px-2 py-0.5 rounded-full border",
+                                statusColors[order.status]
+                              )}
+                            >
+                              {statusLabels[order.status]}
+                            </span>
+                            <span
+                              className={cn(
+                                "inline-block text-[10px] px-2 py-0.5 rounded-full border",
+                                priorityColors[order.priority]
+                              )}
+                            >
+                              {priorityLabels[order.priority]}
+                            </span>
+                          </div>
                         </div>
                       </Link>
                     ))}
@@ -261,25 +371,32 @@ function Card({
 function InvoiceAlertRow({
   contract,
   invoiceDay,
-  overdue,
+  alertType,
   onMarkSent,
 }: {
   contract: { id: string; title: string; client: { fullName: string }; monthlyValue: number };
   invoiceDay: number;
-  overdue?: boolean;
+  alertType: "hoje" | "proximo" | "atrasada";
   onMarkSent: () => void;
 }) {
+  const config = {
+    hoje: { icon: Clock, color: "bg-warning/10 text-warning", label: "Vence hoje" },
+    proximo: { icon: FileText, color: "bg-info/10 text-info", label: "Vence em breve" },
+    atrasada: { icon: AlertCircle, color: "bg-danger/10 text-danger", label: "Atrasada" },
+  };
+  const { icon: Icon, color, label } = config[alertType];
+
   return (
     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-graphite-950 border border-graphite-800 rounded-xl p-4">
       <div className="flex items-start gap-3">
-        <div className={cn("p-2 rounded-lg", overdue ? "bg-danger/10 text-danger" : "bg-warning/10 text-warning")}>
-          {overdue ? <AlertCircle className="w-5 h-5" /> : <Clock className="w-5 h-5" />}
+        <div className={cn("p-2 rounded-lg", color)}>
+          <Icon className="w-5 h-5" />
         </div>
         <div>
           <p className="font-medium">{contract.title}</p>
           <p className="text-sm text-graphite-400">{contract.client.fullName} - {formatCurrency(contract.monthlyValue)}</p>
           <p className="text-xs text-graphite-500">
-            NF deve ser emitida no dia {invoiceDay}
+            {label} - NF deve ser emitida no dia {invoiceDay}
           </p>
         </div>
       </div>

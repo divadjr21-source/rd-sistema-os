@@ -16,6 +16,7 @@ import {
   X,
   CalendarDays,
   Receipt,
+  BarChart3,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -28,6 +29,7 @@ const nav = [
   { href: "/painel/contratos", label: "Contratos", icon: Receipt },
   { href: "/painel/catalogo", label: "Catálogo", icon: Tags },
   { href: "/painel/clientes", label: "Clientes", icon: Users },
+  { href: "/painel/relatorios", label: "Relatórios", icon: BarChart3 },
   { href: "/painel/empresa", label: "Empresa", icon: Building2 },
 ];
 
