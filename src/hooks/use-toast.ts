@@ -39,14 +39,26 @@ export function toast(input: { title: string; description?: string; variant?: To
   return id;
 }
 
+// Extrai uma mensagem legível de qualquer formato de erro, incluindo os
+// erros do Supabase/PostgREST, que são objetos simples no formato
+// { message, details, hint, code } e NÃO são instâncias de Error — por
+// isso "error instanceof Error" sozinho não é suficiente para capturá-los.
+function extractErrorMessage(error: unknown): string {
+  if (error instanceof Error) return error.message;
+  if (typeof error === "string") return error;
+  if (error && typeof error === "object") {
+    const e = error as Record<string, unknown>;
+    const parts = [e.message, e.hint, e.code ? `(código: ${e.code})` : null]
+      .filter((p): p is string => typeof p === "string" && p.length > 0);
+    if (parts.length > 0) return parts.join(" — ");
+  }
+  return "Não foi possível salvar. Verifique sua conexão e tente novamente.";
+}
+
 // Atalho para exibir erros vindos do Supabase / exceções de forma padronizada.
 export function toastError(error: unknown, fallbackTitle = "Erro ao salvar") {
-  const description =
-    error instanceof Error
-      ? error.message
-      : typeof error === "string"
-      ? error
-      : "Não foi possível salvar. Verifique sua conexão e tente novamente.";
+  console.error(fallbackTitle, error);
+  const description = extractErrorMessage(error);
   toast({ title: fallbackTitle, description, variant: "error" });
 }
 
