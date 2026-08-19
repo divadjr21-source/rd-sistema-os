@@ -4,7 +4,7 @@ import { useEffect, useState, useMemo } from "react";
 import Link from "next/link";
 import { getOrders, getPendingInvoices, markInvoiceAsSent, getAppointments } from "@/services/storage";
 import { OrderService, OrderStatus } from "@/types";
-import { formatCurrency, statusLabels, statusColors, priorityLabels, priorityColors } from "@/lib/utils";
+import { formatCurrency, statusLabels, statusColors, priorityLabels, priorityColors, toBrazilDateKey } from "@/lib/utils";
 import {
   ClipboardList,
   DollarSign,
@@ -22,6 +22,7 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { isSameDay, isBefore, startOfDay, addDays, format } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { toast, toastError } from "@/hooks/use-toast";
 
 const columns: { status: OrderStatus; label: string }[] = [
   { status: "pendente", label: "Pendente" },
@@ -98,8 +99,9 @@ export default function DashboardPage() {
           nfIssueDay: i.contract.nfIssueDay,
         }))
       );
+      toast({ title: "Nota fiscal marcada como enviada", variant: "success" });
     } catch (error) {
-      console.error("Erro ao marcar NF como enviada:", error);
+      toastError(error, "Não foi possível marcar a NF como enviada");
     }
   };
 
@@ -122,20 +124,20 @@ export default function DashboardPage() {
 
   const appointmentsToday = appointments.filter((a) => {
     if (!a.scheduledAt) return false;
-    const [year, month, day] = a.scheduledAt.split("T")[0].split("-").map(Number);
+    const [year, month, day] = toBrazilDateKey(a.scheduledAt).split("-").map(Number);
     const scheduledLocal = new Date(year, month - 1, day, 12, 0, 0);
     return isSameDay(scheduledLocal, today);
   });
 
   const appointmentsUpcoming = appointments.filter((a) => {
     if (!a.scheduledAt) return false;
-    const [year, month, day] = a.scheduledAt.split("T")[0].split("-").map(Number);
+    const [year, month, day] = toBrazilDateKey(a.scheduledAt).split("-").map(Number);
     const scheduledLocal = new Date(year, month - 1, day, 12, 0, 0);
     return isBefore(startOfDay(today), startOfDay(scheduledLocal)) || isSameDay(scheduledLocal, addDays(today, 1)) || isSameDay(scheduledLocal, addDays(today, 2)) || isSameDay(scheduledLocal, addDays(today, 3));
   }).filter((a) => !appointmentsToday.some((t) => t.id === a.id));
 
   const formatDateTime = (iso: string) => {
-    const [year, month, day] = iso.split("T")[0].split("-").map(Number);
+    const [year, month, day] = toBrazilDateKey(iso).split("-").map(Number);
     const d = new Date(year, month - 1, day, 12, 0, 0);
     return format(d, "dd/MM/yyyy", { locale: ptBR });
   };

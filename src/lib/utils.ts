@@ -80,6 +80,66 @@ export const budgetStatusColors: Record<string, string> = {
   recusado: "bg-danger/20 text-danger border-danger/30",
 };
 
+// --- Utilidades de data/hora com fuso fixo (Bahia/Brasil, UTC-3, sem horário de verão) ---
+//
+// Problema que essas funções resolvem: o campo `scheduled_at` é gravado como
+// texto sem informar o fuso horário (ex: "2026-08-17T09:00:00"). O Postgres
+// interpreta esse texto usando o fuso horário configurado NA SESSÃO do
+// banco, que pode variar conforme a configuração do projeto Supabase. Isso
+// fazia o dia de um agendamento "andar" um dia para frente/trás dependendo
+// do ambiente. As funções abaixo eliminam essa ambiguidade: ao gravar,
+// sempre anexamos o offset "-03:00" explicitamente; ao ler, sempre
+// convertemos o timestamp (que pode vir em UTC do banco) para o fuso de
+// Brasil antes de extrair o dia/hora exibidos na tela.
+
+export const BRAZIL_TIMEZONE = "America/Bahia";
+
+/** Extrai {year, month, day, hour, minute} de um ISO timestamp, já convertido para o fuso do Brasil. */
+function getBrazilParts(isoString: string) {
+  const date = new Date(isoString);
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: BRAZIL_TIMEZONE,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).formatToParts(date);
+
+  const get = (type: string) => parts.find((p) => p.type === type)?.value || "00";
+  return {
+    year: get("year"),
+    month: get("month"),
+    day: get("day"),
+    hour: get("hour") === "24" ? "00" : get("hour"),
+    minute: get("minute"),
+  };
+}
+
+/** Retorna a chave "YYYY-MM-DD" de um timestamp, já no fuso horário do Brasil. */
+export function toBrazilDateKey(isoString: string): string {
+  const { year, month, day } = getBrazilParts(isoString);
+  return `${year}-${month}-${day}`;
+}
+
+/** Retorna o horário "HH:mm" de um timestamp, já no fuso horário do Brasil. */
+export function toBrazilTimeHM(isoString: string): string {
+  const { hour, minute } = getBrazilParts(isoString);
+  return `${hour}:${minute}`;
+}
+
+/**
+ * Monta um timestamp ISO com offset explícito -03:00 a partir de uma data
+ * "YYYY-MM-DD" e hora "HH:mm" (ou vazio, assume meio-dia). Sempre usar esta
+ * função ao gravar `scheduled_at` no Supabase, para não depender do fuso
+ * horário configurado na sessão do banco.
+ */
+export function buildBrazilTimestamp(dateStr: string, timeStr?: string): string {
+  const time = timeStr && timeStr.length >= 4 ? `${timeStr}:00` : "12:00:00";
+  return `${dateStr}T${time}-03:00`;
+}
+
 export function whatsappLink(phone: string, text: string) {
   const cleaned = phone.replace(/\D/g, "");
   const fullNumber = cleaned.startsWith("55") ? cleaned : `55${cleaned}`;

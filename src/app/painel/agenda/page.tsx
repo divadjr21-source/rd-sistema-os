@@ -22,7 +22,8 @@ import {
 } from "@/components/ui/select";
 import { getAppointments, getOrders, createAppointment, updateAppointment, deleteAppointment } from "@/services/storage";
 import { Appointment, OrderService, AppointmentStatus } from "@/types";
-import { formatPhone } from "@/lib/utils";
+import { formatPhone, toBrazilDateKey, toBrazilTimeHM, buildBrazilTimestamp } from "@/lib/utils";
+import { toast, toastError } from "@/hooks/use-toast";
 import { format, isSameMonth, isSameDay, addMonths, subMonths, getDay } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import {
@@ -119,7 +120,9 @@ export default function AgendaPage() {
     const map = new Map<string, Appointment[]>();
     for (const a of appointments) {
       if (!a.scheduledAt) continue;
-      const key = a.scheduledAt.split("T")[0];
+      // Sempre converte para o dia no fuso do Brasil antes de agrupar,
+      // independente de como o timestamp foi retornado pelo Supabase.
+      const key = toBrazilDateKey(a.scheduledAt);
       const existing = map.get(key) || [];
       existing.push(a);
       map.set(key, existing);
@@ -167,8 +170,10 @@ export default function AgendaPage() {
 
   const openEdit = (appointment: Appointment) => {
     setEditingId(appointment.id);
-    const localDate = appointment.scheduledAt ? parseLocalNoon(appointment.scheduledAt) : new Date();
-    const time = appointment.scheduledAt ? appointment.scheduledAt.split("T")[1]?.slice(0, 5) || "" : "";
+    const localDate = appointment.scheduledAt
+      ? parseLocalNoon(toBrazilDateKey(appointment.scheduledAt))
+      : new Date();
+    const time = appointment.scheduledAt ? toBrazilTimeHM(appointment.scheduledAt) : "";
     setForm({
       orderId: appointment.orderId || "",
       clientId: appointment.clientId || appointment.order?.clientId || "",
@@ -188,9 +193,10 @@ export default function AgendaPage() {
 
     setSubmitting(true);
     try {
-      const scheduledAt = form.scheduledTime
-        ? `${form.scheduledDate}T${form.scheduledTime}:00`
-        : `${form.scheduledDate}T12:00:00`;
+      // Sempre grava com o offset -03:00 explícito, para não depender do
+      // fuso horário configurado na sessão do banco (isso é o que causava
+      // o agendamento aparecer no dia errado do calendário).
+      const scheduledAt = buildBrazilTimestamp(form.scheduledDate, form.scheduledTime);
 
       const orderId = form.orderId || null;
       const clientId = form.clientId || selectedOrder?.clientId || null;
@@ -212,9 +218,9 @@ export default function AgendaPage() {
       await refresh();
       setModalOpen(false);
       resetForm();
+      toast({ title: editingId ? "Agendamento atualizado" : "Agendamento criado", variant: "success" });
     } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : "Erro ao salvar agendamento";
-      alert(message);
+      toastError(error, "Não foi possível salvar o agendamento");
     } finally {
       setSubmitting(false);
     }
@@ -227,10 +233,15 @@ export default function AgendaPage() {
 
   const handleDelete = async () => {
     if (!appointmentToDelete) return;
-    await deleteAppointment(appointmentToDelete.id);
-    await refresh();
-    setDeleteModalOpen(false);
-    setAppointmentToDelete(null);
+    try {
+      await deleteAppointment(appointmentToDelete.id);
+      await refresh();
+      setDeleteModalOpen(false);
+      setAppointmentToDelete(null);
+      toast({ title: "Agendamento excluído", variant: "success" });
+    } catch (error) {
+      toastError(error, "Não foi possível excluir o agendamento");
+    }
   };
 
   const getAppointmentsForDay = (day: Date) => appointmentsByDate.get(localDateKey(day)) || [];
@@ -341,7 +352,7 @@ export default function AgendaPage() {
                           appointmentStatusColors[a.status]
                         )}
                       >
-                        {a.scheduledAt ? a.scheduledAt.split("T")[1]?.slice(0, 5) : ""} {a.title}
+                        {a.scheduledAt ? toBrazilTimeHM(a.scheduledAt) : ""} {a.title}
                       </div>
                     ))}
                     {dayAppointments.length > 2 && (
@@ -565,13 +576,13 @@ function AppointmentRow({
 }) {
   const dateLabel = useMemo(() => {
     if (!appointment.scheduledAt) return "";
-    const local = parseLocalNoon(appointment.scheduledAt);
+    const local = parseLocalNoon(toBrazilDateKey(appointment.scheduledAt));
     return format(local, "dd/MM/yyyy");
   }, [appointment.scheduledAt]);
 
   const timeLabel = useMemo(() => {
     if (!appointment.scheduledAt) return "";
-    return appointment.scheduledAt.split("T")[1]?.slice(0, 5) || "";
+    return toBrazilTimeHM(appointment.scheduledAt);
   }, [appointment.scheduledAt]);
 
   return (

@@ -578,6 +578,7 @@ export async function addOrderUpdate(
     order_id: orderId,
     status: "tratativa",
     note,
+    source: "manual",
   });
   if (error) throw error;
   return getOrderUpdates(orderId);
@@ -588,7 +589,7 @@ export async function getOrderUpdates(orderId: string): Promise<{ id: string; no
     .from("order_status_history")
     .select("id, note, created_at")
     .eq("order_id", orderId)
-    .neq("note", "log_status")
+    .eq("source", "manual")
     .order("created_at", { ascending: false });
   if (error) throw error;
   return (data || []).map((row) => ({

@@ -30,6 +30,7 @@ import { Contract, Client } from "@/types";
 import { formatCurrency, formatPhone } from "@/lib/utils";
 import { Search, Plus, Pencil, Trash2, FileText, User, Calendar, DollarSign, AlertTriangle } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { toast, toastError } from "@/hooks/use-toast";
 
 export default function ContractsPage() {
   const [contracts, setContracts] = useState<Contract[]>([]);
@@ -55,9 +56,13 @@ export default function ContractsPage() {
   }, []);
 
   const refresh = async () => {
-    const [c, cl] = await Promise.all([getContracts(), getClients()]);
-    setContracts(c);
-    setClients(cl);
+    try {
+      const [c, cl] = await Promise.all([getContracts(), getClients()]);
+      setContracts(c);
+      setClients(cl);
+    } catch (error) {
+      toastError(error, "Erro ao carregar contratos");
+    }
   };
 
   const resetForm = () => {
@@ -118,9 +123,9 @@ export default function ContractsPage() {
       await refresh();
       setModalOpen(false);
       resetForm();
+      toast({ title: editingId ? "Contrato atualizado" : "Contrato criado", variant: "success" });
     } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : "Erro ao salvar contrato";
-      alert(message);
+      toastError(error, "Não foi possível salvar o contrato");
     } finally {
       setSubmitting(false);
     }
@@ -133,10 +138,15 @@ export default function ContractsPage() {
 
   const handleDelete = async () => {
     if (!contractToDelete) return;
-    await deleteContract(contractToDelete.id);
-    await refresh();
-    setDeleteModalOpen(false);
-    setContractToDelete(null);
+    try {
+      await deleteContract(contractToDelete.id);
+      await refresh();
+      setDeleteModalOpen(false);
+      setContractToDelete(null);
+      toast({ title: "Contrato excluído", variant: "success" });
+    } catch (error) {
+      toastError(error, "Não foi possível excluir o contrato");
+    }
   };
 
   return (

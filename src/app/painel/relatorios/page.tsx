@@ -3,11 +3,14 @@
 import { useEffect, useMemo, useState } from "react";
 import { format, subMonths, addMonths } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { getOrdersByMonth, getActiveContracts } from "@/services/storage";
+import { getOrdersByMonth, getActiveContracts, getCompany } from "@/services/storage";
 import { OrderService, Contract } from "@/types";
-import { formatCurrency } from "@/lib/utils";
+import { formatCurrency, statusLabels } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import { ChevronLeft, ChevronRight, ClipboardList, CheckCircle, XCircle, TrendingUp, Receipt, Download } from "lucide-react";
+import { ChevronLeft, ChevronRight, ClipboardList, CheckCircle, XCircle, TrendingUp, Receipt, Download, Printer } from "lucide-react";
+import jsPDF from "jspdf";
+import autoTable from "jspdf-autotable";
+import { toast, toastError } from "@/hooks/use-toast";
 
 export default function RelatoriosPage() {
   const [currentDate, setCurrentDate] = useState(new Date());
@@ -28,6 +31,8 @@ export default function RelatoriosPage() {
       const [o, c] = await Promise.all([getOrdersByMonth(year, month), getActiveContracts()]);
       setOrders(o);
       setContracts(c);
+    } catch (error) {
+      toastError(error, "Erro ao carregar relatório");
     } finally {
       setLoading(false);
     }
@@ -35,6 +40,88 @@ export default function RelatoriosPage() {
 
   const handlePrint = () => {
     window.print();
+  };
+
+  const handleDownloadPDF = async () => {
+    try {
+      const company = await getCompany().catch(() => null);
+      const doc = new jsPDF();
+      const pageWidth = doc.internal.pageSize.getWidth();
+      const marginX = 14;
+
+      doc.setFillColor(16, 24, 21);
+      doc.rect(0, 0, pageWidth, 28, "F");
+      doc.setTextColor(255, 255, 255);
+      doc.setFontSize(15);
+      doc.setFont("helvetica", "bold");
+      doc.text(company?.name || "RD Solutions", marginX, 13);
+      doc.setFontSize(10);
+      doc.setFont("helvetica", "normal");
+      doc.text("Relatório Mensal", marginX, 20);
+      doc.setFontSize(11);
+      doc.text(format(currentDate, "MMMM yyyy", { locale: ptBR }), pageWidth - marginX, 16, {
+        align: "right",
+      });
+
+      doc.setTextColor(20, 20, 20);
+      let y = 38;
+
+      doc.setFontSize(11);
+      doc.setFont("helvetica", "bold");
+      doc.text("Resumo do Período", marginX, y);
+      y += 8;
+
+      const summaryRows = [
+        ["Total de O.S.", String(orders.length)],
+        ["O.S. Finalizadas", String(finalizados.length)],
+        ["O.S. em Aberto", String(emAberto.length)],
+        ["O.S. Canceladas/Recusadas", String(cancelados.length)],
+        ["Faturamento de O.S. Concluídas", formatCurrency(faturamentoOS)],
+        ["Contratos Mensais Ativos", `${contracts.length} contrato(s) - ${formatCurrency(faturamentoContratos)}`],
+        ["Faturamento Total do Mês", formatCurrency(faturamentoTotal)],
+      ];
+
+      autoTable(doc, {
+        startY: y,
+        margin: { left: marginX, right: marginX },
+        theme: "plain",
+        styles: { fontSize: 10, cellPadding: 1.5 },
+        columnStyles: { 1: { halign: "right", fontStyle: "bold" } },
+        body: summaryRows,
+      });
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      y = (doc as any).lastAutoTable.finalY + 10;
+
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(11);
+      doc.text("Detalhamento das O.S.", marginX, y);
+
+      autoTable(doc, {
+        startY: y + 3,
+        margin: { left: marginX, right: marginX },
+        head: [["O.S.", "Cliente", "Status", "Data", "Valor"]],
+        body: orders.map((order) => {
+          const total = (order.budgetItems || []).reduce((acc, item) => acc + item.total, 0);
+          return [
+            order.number,
+            order.client.fullName,
+            statusLabels[order.status] || order.status,
+            new Date(order.createdAt).toLocaleDateString("pt-BR"),
+            formatCurrency(total),
+          ];
+        }),
+        theme: "grid",
+        headStyles: { fillColor: [16, 24, 21] },
+        styles: { fontSize: 8.5 },
+        columnStyles: { 4: { halign: "right" } },
+      });
+
+      doc.save(`relatorio-${format(currentDate, "yyyy-MM")}.pdf`);
+      toast({ title: "PDF do relatório gerado com sucesso", variant: "success" });
+    } catch (error) {
+      toastError(error, "Não foi possível gerar o PDF do relatório");
+    }
   };
 
   const finalizados = useMemo(() => orders.filter((o) => o.status === "finalizado"), [orders]);
@@ -104,9 +191,12 @@ export default function RelatoriosPage() {
             <p className="text-sm text-gray-600 capitalize">{format(currentDate, "MMMM yyyy", { locale: ptBR })}</p>
           </div>
 
-          <div className="flex items-center justify-end print:hidden">
-            <Button type="button" onClick={handlePrint} className="gap-2">
-              <Download className="w-4 h-4" /> Exportar / Baixar PDF
+          <div className="flex items-center justify-end gap-2 print:hidden">
+            <Button type="button" variant="outline" onClick={handlePrint} className="gap-2">
+              <Printer className="w-4 h-4" /> Imprimir
+            </Button>
+            <Button type="button" onClick={handleDownloadPDF} className="gap-2">
+              <Download className="w-4 h-4" /> Baixar PDF
             </Button>
           </div>
 

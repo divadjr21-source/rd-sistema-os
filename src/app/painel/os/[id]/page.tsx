@@ -53,6 +53,8 @@ import {
 } from "lucide-react";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
+import { toast, toastError } from "@/hooks/use-toast";
+import { getCompany } from "@/services/storage";
 
 const statusOptions: OrderStatus[] = [
   "pendente",
@@ -82,19 +84,27 @@ export default function OrderDetailPage() {
   const [updates, setUpdates] = useState<{ id: string; note: string; createdAt: string }[]>([]);
   const [newUpdate, setNewUpdate] = useState("");
   const [sendingUpdate, setSendingUpdate] = useState(false);
+  const [descriptionDraft, setDescriptionDraft] = useState("");
+  const [savingDescription, setSavingDescription] = useState(false);
+  const [savingItem, setSavingItem] = useState(false);
 
   useEffect(() => {
     refresh();
   }, [id]);
 
   const refresh = async () => {
-    const [o, c] = await Promise.all([getOrderById(id), getCatalog()]);
-    if (o) {
-      setOrder(o);
-      const history = await getOrderUpdates(id);
-      setUpdates(history);
+    try {
+      const [o, c] = await Promise.all([getOrderById(id), getCatalog()]);
+      if (o) {
+        setOrder(o);
+        setDescriptionDraft(o.description);
+        const history = await getOrderUpdates(id);
+        setUpdates(history);
+      }
+      setCatalog(c);
+    } catch (error) {
+      toastError(error, "Erro ao carregar a O.S.");
     }
-    setCatalog(c);
   };
 
   const total = useMemo(() => {
@@ -102,21 +112,50 @@ export default function OrderDetailPage() {
   }, [order]);
 
   const handleStatusChange = async (status: OrderStatus) => {
-    await updateOrderStatus(id, status);
-    const updated = await getOrderById(id);
-    if (updated) setOrder(updated);
+    const previous = order;
+    if (order) setOrder({ ...order, status });
+    try {
+      await updateOrderStatus(id, status);
+      const updated = await getOrderById(id);
+      if (updated) setOrder(updated);
+      toast({ title: "Status atualizado", variant: "success" });
+    } catch (error) {
+      if (previous) setOrder(previous);
+      toastError(error, "Não foi possível salvar o status");
+    }
   };
 
   const handlePriorityChange = async (priority: OrderPriority) => {
-    await updateOrderPriority(id, priority);
-    const updated = await getOrderById(id);
-    if (updated) setOrder(updated);
+    const previous = order;
+    if (order) setOrder({ ...order, priority });
+    try {
+      await updateOrderPriority(id, priority);
+      const updated = await getOrderById(id);
+      if (updated) setOrder(updated);
+      toast({ title: "Prioridade atualizada", variant: "success" });
+    } catch (error) {
+      if (previous) setOrder(previous);
+      toastError(error, "Não foi possível salvar a prioridade");
+    }
   };
 
-  const handleDescriptionChange = async (description: string) => {
-    await updateOrderDescription(id, description);
-    const updated = await getOrderById(id);
-    if (updated) setOrder(updated);
+  // Só grava a descrição quando o técnico sai do campo (onBlur), nunca a cada
+  // tecla digitada. Isso evita o "come letra": salvar a cada tecla disparava
+  // uma requisição ao Supabase e uma busca completa da O.S. a cada caractere,
+  // e respostas fora de ordem sobrescreviam o texto que já tinha sido digitado.
+  const handleDescriptionBlur = async () => {
+    if (!order || descriptionDraft === order.description) return;
+    setSavingDescription(true);
+    try {
+      await updateOrderDescription(id, descriptionDraft);
+      setOrder({ ...order, description: descriptionDraft });
+      toast({ title: "Descrição salva", variant: "success" });
+    } catch (error) {
+      setDescriptionDraft(order.description);
+      toastError(error, "Não foi possível salvar a descrição");
+    } finally {
+      setSavingDescription(false);
+    }
   };
 
   const handleAddUpdate = async () => {
@@ -127,24 +166,42 @@ export default function OrderDetailPage() {
       const history = await addOrderUpdate(id, note);
       setUpdates(history);
       setNewUpdate("");
+    } catch (error) {
+      toastError(error, "Não foi possível salvar a tratativa");
     } finally {
       setSendingUpdate(false);
     }
   };
 
   const handleAddItem = async () => {
-    if (!newItem.name || newItem.quantity <= 0 || newItem.unitPrice < 0) return;
-    await addBudgetItem(id, newItem);
-    const updated = await getOrderById(id);
-    if (updated) setOrder(updated);
-    setNewItem({ name: "", type: "material", quantity: 1, unitPrice: 0 });
-    setItemDialogOpen(false);
+    if (!newItem.name || newItem.quantity <= 0 || newItem.unitPrice < 0) {
+      toast({ title: "Preencha nome, quantidade e valor do item", variant: "error" });
+      return;
+    }
+    if (savingItem) return;
+    setSavingItem(true);
+    try {
+      await addBudgetItem(id, newItem);
+      const updated = await getOrderById(id);
+      if (updated) setOrder(updated);
+      setNewItem({ name: "", type: "material", quantity: 1, unitPrice: 0 });
+      setItemDialogOpen(false);
+      toast({ title: "Item adicionado ao orçamento", variant: "success" });
+    } catch (error) {
+      toastError(error, "Não foi possível adicionar o item");
+    } finally {
+      setSavingItem(false);
+    }
   };
 
   const handleRemoveItem = async (itemId: string) => {
-    await removeBudgetItem(itemId);
-    const updated = await getOrderById(id);
-    if (updated) setOrder(updated);
+    try {
+      await removeBudgetItem(itemId);
+      const updated = await getOrderById(id);
+      if (updated) setOrder(updated);
+    } catch (error) {
+      toastError(error, "Não foi possível remover o item");
+    }
   };
 
   const selectCatalogItem = (catalogId: string) => {
@@ -159,31 +216,161 @@ export default function OrderDetailPage() {
     }
   };
 
-  const generatePDF = () => {
+  const generatePDF = async () => {
     if (!order) return;
-    const doc = new jsPDF();
-    doc.setFontSize(18);
-    doc.text("Orçamento - RD Solutions", 14, 20);
-    doc.setFontSize(11);
-    doc.text(`O.S.: ${order.number}`, 14, 32);
-    doc.text(`Cliente: ${order.client.fullName}`, 14, 39);
-    doc.text(`Telefone: ${formatPhone(order.client.phone)}`, 14, 46);
-    doc.text(`Endereço: ${order.client.address}`, 14, 53);
+    try {
+      const company = await getCompany();
+      const doc = new jsPDF();
+      const pageWidth = doc.internal.pageSize.getWidth();
+      const marginX = 14;
 
-    autoTable(doc, {
-      startY: 62,
-      head: [["Item", "Tipo", "Qtd", "Valor Unit.", "Total"]],
-      body: (order.budgetItems || []).map((item) => [
-        item.name,
-        item.type === "material" ? "Material" : "Serviço",
-        item.quantity,
-        formatCurrency(item.unitPrice),
-        formatCurrency(item.total),
-      ]),
-      foot: [["", "", "", "TOTAL", formatCurrency(total)]],
-    });
+      // --- Cabeçalho / letterhead ---
+      doc.setFillColor(16, 24, 21);
+      doc.rect(0, 0, pageWidth, 34, "F");
+      doc.setTextColor(255, 255, 255);
+      doc.setFontSize(16);
+      doc.setFont("helvetica", "bold");
+      doc.text(company.name || "RD Solutions", marginX, 15);
+      doc.setFontSize(9);
+      doc.setFont("helvetica", "normal");
+      const contactLine = [company.address, company.city].filter(Boolean).join(" - ");
+      if (contactLine) doc.text(contactLine, marginX, 21);
+      if (company.whatsapp) doc.text(`WhatsApp: ${formatPhone(company.whatsapp)}`, marginX, 27);
 
-    doc.save(`orcamento-${order.number}.pdf`);
+      doc.setFontSize(13);
+      doc.text("ORÇAMENTO", pageWidth - marginX, 15, { align: "right" });
+      doc.setFontSize(9);
+      doc.text(`O.S. Nº ${order.number}`, pageWidth - marginX, 21, { align: "right" });
+      doc.text(new Date().toLocaleDateString("pt-BR"), pageWidth - marginX, 27, { align: "right" });
+
+      doc.setTextColor(20, 20, 20);
+
+      // --- Dados do cliente ---
+      let y = 44;
+      doc.setFontSize(11);
+      doc.setFont("helvetica", "bold");
+      doc.text("Dados do Cliente", marginX, y);
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(10);
+      y += 7;
+      doc.text(`Cliente: ${order.client.fullName}`, marginX, y);
+      y += 6;
+      doc.text(`Telefone: ${formatPhone(order.client.phone)}`, marginX, y);
+      y += 6;
+      doc.text(`Endereço: ${order.client.address}`, marginX, y);
+      y += 6;
+      doc.text(`Descrição do problema: ${order.description}`, marginX, y, {
+        maxWidth: pageWidth - marginX * 2,
+      });
+      y += 12;
+
+      const items = order.budgetItems || [];
+      const products = items.filter((i) => i.type === "material");
+      const services = items.filter((i) => i.type === "service");
+
+      // --- Tabela de Produtos ---
+      if (products.length > 0) {
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(11);
+        doc.text("Produtos / Materiais", marginX, y);
+        autoTable(doc, {
+          startY: y + 3,
+          margin: { left: marginX, right: marginX },
+          head: [["Item", "Qtd", "Valor Unit.", "Total"]],
+          body: products.map((item) => [
+            item.name,
+            String(item.quantity),
+            formatCurrency(item.unitPrice),
+            formatCurrency(item.total),
+          ]),
+          theme: "grid",
+          headStyles: { fillColor: [16, 24, 21] },
+          styles: { fontSize: 9 },
+        });
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        y = (doc as any).lastAutoTable.finalY + 10;
+      }
+
+      // --- Tabela de Serviços ---
+      if (services.length > 0) {
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(11);
+        doc.text("Serviços", marginX, y);
+        autoTable(doc, {
+          startY: y + 3,
+          margin: { left: marginX, right: marginX },
+          head: [["Item", "Qtd", "Valor Unit.", "Total"]],
+          body: services.map((item) => [
+            item.name,
+            String(item.quantity),
+            formatCurrency(item.unitPrice),
+            formatCurrency(item.total),
+          ]),
+          theme: "grid",
+          headStyles: { fillColor: [16, 24, 21] },
+          styles: { fontSize: 9 },
+        });
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        y = (doc as any).lastAutoTable.finalY + 10;
+      }
+
+      if (items.length === 0) {
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(10);
+        doc.text("Nenhum item de orçamento cadastrado.", marginX, y);
+        y += 10;
+      }
+
+      // --- Total geral ---
+      doc.setFillColor(230, 245, 238);
+      doc.rect(marginX, y, pageWidth - marginX * 2, 12, "F");
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(12);
+      doc.text("TOTAL GERAL", marginX + 4, y + 8);
+      doc.text(formatCurrency(total), pageWidth - marginX - 4, y + 8, { align: "right" });
+      y += 22;
+
+      // --- Termos e condições ---
+      if (y > 240) {
+        doc.addPage();
+        y = 20;
+      }
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(10);
+      doc.text("Termos e Condições", marginX, y);
+      y += 6;
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(8.5);
+      const terms = [
+        "1. Este orçamento tem validade de 15 (quinze) dias corridos a partir da data de emissão.",
+        "2. Os valores acima incluem mão de obra e materiais listados; itens não previstos serão orçados à parte.",
+        "3. O início dos serviços está condicionado à aprovação formal deste orçamento pelo cliente.",
+        "4. Eventuais alterações de escopo solicitadas pelo cliente durante a execução poderão gerar aditivo de valor.",
+        "5. A garantia dos serviços executados é de 90 (noventa) dias, contados a partir da data de conclusão.",
+      ];
+      terms.forEach((line) => {
+        doc.text(line, marginX, y, { maxWidth: pageWidth - marginX * 2 });
+        y += 5;
+      });
+
+      // --- Assinatura ---
+      y += 18;
+      if (y > 270) {
+        doc.addPage();
+        y = 30;
+      }
+      doc.setDrawColor(120, 120, 120);
+      doc.line(marginX, y, marginX + 80, y);
+      doc.line(pageWidth - marginX - 80, y, pageWidth - marginX, y);
+      doc.setFontSize(9);
+      doc.text("Assinatura do Cliente", marginX, y + 5);
+      doc.text("Assinatura do Responsável Técnico", pageWidth - marginX - 80, y + 5);
+
+      doc.save(`orcamento-${order.number}.pdf`);
+      toast({ title: "PDF gerado com sucesso", variant: "success" });
+    } catch (error) {
+      toastError(error, "Não foi possível gerar o PDF");
+    }
   };
 
   if (!order) {
@@ -258,10 +445,14 @@ export default function OrderDetailPage() {
             </div>
 
             <div className="mt-5">
-              <Label className="text-graphite-300 mb-1.5 block">Descrição do Problema</Label>
+              <Label className="text-graphite-300 mb-1.5 block flex items-center gap-2">
+                Descrição do Problema
+                {savingDescription && <span className="text-xs text-graphite-500">salvando...</span>}
+              </Label>
               <Textarea
-                value={order.description}
-                onChange={(e) => handleDescriptionChange(e.target.value)}
+                value={descriptionDraft}
+                onChange={(e) => setDescriptionDraft(e.target.value)}
+                onBlur={handleDescriptionBlur}
                 className="bg-graphite-950 min-h-[100px]"
               />
             </div>

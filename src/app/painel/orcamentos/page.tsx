@@ -33,6 +33,7 @@ import {
 import BudgetModal from "@/components/budget-modal";
 import { Search, Eye, Send, FileText, Plus, Trash2, Pencil, AlertTriangle } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { toast, toastError } from "@/hooks/use-toast";
 
 export default function OrcamentosPage() {
   const [orders, setOrders] = useState<OrderService[]>([]);
@@ -52,10 +53,14 @@ export default function OrcamentosPage() {
   }, []);
 
   const refresh = async () => {
-    const [o, c, cat] = await Promise.all([getOrders(), getClients(), getCatalog()]);
-    setOrders(o);
-    setClients(c);
-    setCatalog(cat);
+    try {
+      const [o, c, cat] = await Promise.all([getOrders(), getClients(), getCatalog()]);
+      setOrders(o);
+      setClients(c);
+      setCatalog(cat);
+    } catch (error) {
+      toastError(error, "Erro ao carregar orçamentos");
+    }
   };
 
   const filtered = useMemo(() => {
@@ -150,6 +155,9 @@ export default function OrcamentosPage() {
 
       await refresh();
       setCreateModalOpen(false);
+      toast({ title: "Orçamento salvo com sucesso", variant: "success" });
+    } catch (error) {
+      toastError(error, "Não foi possível salvar o orçamento");
     } finally {
       setSubmitting(false);
     }
@@ -181,6 +189,9 @@ export default function OrcamentosPage() {
       await refresh();
       setEditModalOpen(false);
       resetEditing();
+      toast({ title: "Orçamento atualizado com sucesso", variant: "success" });
+    } catch (error) {
+      toastError(error, "Não foi possível atualizar o orçamento");
     } finally {
       setSubmitting(false);
     }
@@ -193,14 +204,19 @@ export default function OrcamentosPage() {
 
   const handleDelete = async () => {
     if (!orderToDelete) return;
-    await deleteOrder(orderToDelete.id);
-    await refresh();
-    setDeleteModalOpen(false);
-    setOrderToDelete(null);
+    try {
+      await deleteOrder(orderToDelete.id);
+      await refresh();
+      setDeleteModalOpen(false);
+      setOrderToDelete(null);
+      toast({ title: "Orçamento excluído", variant: "success" });
+    } catch (error) {
+      toastError(error, "Não foi possível excluir o orçamento");
+    }
   };
 
   const handleSendWhatsApp = async (order: OrderService) => {
-    const company = await getCompany();
+    const company = await getCompany().catch(() => ({ name: "RD Solutions" }) as Awaited<ReturnType<typeof getCompany>>);
     const total = (order.budgetItems || []).reduce((acc, item) => acc + item.total, 0);
     const link = `${typeof window !== "undefined" ? window.location.origin : ""}/orcamento/${order.id}`;
     const text = `*Orçamento ${company.name || "RD Solutions"} - O.S. ${order.number}*
