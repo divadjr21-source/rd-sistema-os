@@ -90,6 +90,12 @@ export default function ChamadoPage() {
       setWhatsappUrl(whatsappLink(company.whatsapp || "31999999999", text));
       setSubmitted(true);
       window.scrollTo({ top: 0, behavior: "smooth" });
+    } catch (error) {
+      alert(
+        error instanceof Error
+          ? error.message
+          : "Não foi possível enviar o chamado. Verifique sua conexão e tente novamente."
+      );
     } finally {
       setSubmitting(false);
     }

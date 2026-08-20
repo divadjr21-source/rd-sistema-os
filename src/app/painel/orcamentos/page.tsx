@@ -33,7 +33,7 @@ import {
 import BudgetModal from "@/components/budget-modal";
 import { Search, Eye, Send, FileText, Plus, Trash2, Pencil, AlertTriangle } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { toast, toastError } from "@/hooks/use-toast";
+import { toast } from "@/hooks/use-toast";
 
 export default function OrcamentosPage() {
   const [orders, setOrders] = useState<OrderService[]>([]);
@@ -59,7 +59,7 @@ export default function OrcamentosPage() {
       setClients(c);
       setCatalog(cat);
     } catch (error) {
-      toastError(error, "Erro ao carregar orçamentos");
+      alert(error instanceof Error ? error.message : "Erro ao carregar orçamentos.");
     }
   };
 
@@ -157,7 +157,7 @@ export default function OrcamentosPage() {
       setCreateModalOpen(false);
       toast({ title: "Orçamento salvo com sucesso", variant: "success" });
     } catch (error) {
-      toastError(error, "Não foi possível salvar o orçamento");
+      alert(error instanceof Error ? error.message : "Não foi possível salvar o orçamento.");
     } finally {
       setSubmitting(false);
     }
@@ -191,7 +191,7 @@ export default function OrcamentosPage() {
       resetEditing();
       toast({ title: "Orçamento atualizado com sucesso", variant: "success" });
     } catch (error) {
-      toastError(error, "Não foi possível atualizar o orçamento");
+      alert(error instanceof Error ? error.message : "Não foi possível atualizar o orçamento.");
     } finally {
       setSubmitting(false);
     }
@@ -211,7 +211,7 @@ export default function OrcamentosPage() {
       setOrderToDelete(null);
       toast({ title: "Orçamento excluído", variant: "success" });
     } catch (error) {
-      toastError(error, "Não foi possível excluir o orçamento");
+      alert(error instanceof Error ? error.message : "Não foi possível excluir o orçamento.");
     }
   };
 

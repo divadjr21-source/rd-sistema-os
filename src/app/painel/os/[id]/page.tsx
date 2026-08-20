@@ -78,8 +78,9 @@ export default function OrderDetailPage() {
   const [newItem, setNewItem] = useState({
     name: "",
     type: "material" as "material" | "service",
-    quantity: 1,
-    unitPrice: 0,
+    // String para permitir apagar o campo (inclusive o zero inicial) ao digitar.
+    quantity: "1",
+    unitPrice: "",
   });
   const [updates, setUpdates] = useState<{ id: string; note: string; createdAt: string }[]>([]);
   const [newUpdate, setNewUpdate] = useState("");
@@ -103,7 +104,7 @@ export default function OrderDetailPage() {
       }
       setCatalog(c);
     } catch (error) {
-      toastError(error, "Erro ao carregar a O.S.");
+      alert(error instanceof Error ? error.message : "Erro ao carregar a O.S.");
     }
   };
 
@@ -121,7 +122,7 @@ export default function OrderDetailPage() {
       toast({ title: "Status atualizado", variant: "success" });
     } catch (error) {
       if (previous) setOrder(previous);
-      toastError(error, "Não foi possível salvar o status");
+      alert(error instanceof Error ? error.message : "Não foi possível salvar o status.");
     }
   };
 
@@ -135,7 +136,7 @@ export default function OrderDetailPage() {
       toast({ title: "Prioridade atualizada", variant: "success" });
     } catch (error) {
       if (previous) setOrder(previous);
-      toastError(error, "Não foi possível salvar a prioridade");
+      alert(error instanceof Error ? error.message : "Não foi possível salvar a prioridade.");
     }
   };
 
@@ -152,7 +153,7 @@ export default function OrderDetailPage() {
       toast({ title: "Descrição salva", variant: "success" });
     } catch (error) {
       setDescriptionDraft(order.description);
-      toastError(error, "Não foi possível salvar a descrição");
+      alert(error instanceof Error ? error.message : "Não foi possível salvar a descrição.");
     } finally {
       setSavingDescription(false);
     }
@@ -167,28 +168,30 @@ export default function OrderDetailPage() {
       setUpdates(history);
       setNewUpdate("");
     } catch (error) {
-      toastError(error, "Não foi possível salvar a tratativa");
+      alert(error instanceof Error ? error.message : "Não foi possível salvar a tratativa.");
     } finally {
       setSendingUpdate(false);
     }
   };
 
   const handleAddItem = async () => {
-    if (!newItem.name || newItem.quantity <= 0 || newItem.unitPrice < 0) {
-      toast({ title: "Preencha nome, quantidade e valor do item", variant: "error" });
+    const quantity = Number(newItem.quantity) || 0;
+    const unitPrice = Number(newItem.unitPrice) || 0;
+    if (!newItem.name.trim() || quantity <= 0 || unitPrice < 0) {
+      alert("Preencha nome, quantidade e valor do item.");
       return;
     }
     if (savingItem) return;
     setSavingItem(true);
     try {
-      await addBudgetItem(id, newItem);
+      await addBudgetItem(id, { name: newItem.name, type: newItem.type, quantity, unitPrice });
       const updated = await getOrderById(id);
       if (updated) setOrder(updated);
-      setNewItem({ name: "", type: "material", quantity: 1, unitPrice: 0 });
+      setNewItem({ name: "", type: "material", quantity: "1", unitPrice: "" });
       setItemDialogOpen(false);
       toast({ title: "Item adicionado ao orçamento", variant: "success" });
     } catch (error) {
-      toastError(error, "Não foi possível adicionar o item");
+      alert(error instanceof Error ? error.message : "Não foi possível adicionar o item.");
     } finally {
       setSavingItem(false);
     }
@@ -200,7 +203,7 @@ export default function OrderDetailPage() {
       const updated = await getOrderById(id);
       if (updated) setOrder(updated);
     } catch (error) {
-      toastError(error, "Não foi possível remover o item");
+      alert(error instanceof Error ? error.message : "Não foi possível remover o item.");
     }
   };
 
@@ -210,8 +213,8 @@ export default function OrderDetailPage() {
       setNewItem({
         name: item.name,
         type: item.type,
-        quantity: 1,
-        unitPrice: item.unitPrice,
+        quantity: "1",
+        unitPrice: String(item.unitPrice),
       });
     }
   };
@@ -593,10 +596,21 @@ export default function OrderDetailPage() {
                       <div className="space-y-1.5">
                         <Label>Quantidade</Label>
                         <Input
-                          type="number"
-                          min={1}
+                          type="text"
+                          inputMode="decimal"
                           value={newItem.quantity}
-                          onChange={(e) => setNewItem({ ...newItem, quantity: Number(e.target.value) })}
+                          onChange={(e) => {
+                            const v = e.target.value;
+                            if (v === "" || /^\d*[.,]?\d*$/.test(v)) {
+                              setNewItem({ ...newItem, quantity: v.replace(",", ".") });
+                            }
+                          }}
+                          onBlur={() => {
+                            if (newItem.quantity === "" || Number(newItem.quantity) <= 0) {
+                              setNewItem({ ...newItem, quantity: "1" });
+                            }
+                          }}
+                          placeholder="1"
                         />
                       </div>
                     </div>
@@ -604,11 +618,19 @@ export default function OrderDetailPage() {
                     <div className="space-y-1.5">
                       <Label>Valor Unitário (R$)</Label>
                       <Input
-                        type="number"
-                        min={0}
-                        step={0.01}
+                        type="text"
+                        inputMode="decimal"
                         value={newItem.unitPrice}
-                        onChange={(e) => setNewItem({ ...newItem, unitPrice: Number(e.target.value) })}
+                        onChange={(e) => {
+                          const v = e.target.value;
+                          if (v === "" || /^\d*[.,]?\d*$/.test(v)) {
+                            setNewItem({ ...newItem, unitPrice: v.replace(",", ".") });
+                          }
+                        }}
+                        onBlur={() => {
+                          if (newItem.unitPrice === "") setNewItem({ ...newItem, unitPrice: "0" });
+                        }}
+                        placeholder="0,00"
                       />
                     </div>
 

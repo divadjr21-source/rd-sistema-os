@@ -18,8 +18,12 @@ type DraftItem = {
   id?: string;
   name: string;
   type: "material" | "service";
-  quantity: number;
-  unitPrice: number;
+  // Mantidos como string durante a edição para permitir apagar o campo
+  // completamente (inclusive o "0" inicial) sem o React forçar de volta
+  // um "0" no meio da digitação. São convertidos para número só na hora
+  // de calcular o total e no envio final ao Supabase.
+  quantity: string;
+  unitPrice: string;
 };
 
 type FormState = {
@@ -101,8 +105,8 @@ export default function BudgetModal({
           id: b.id,
           name: b.name,
           type: b.type,
-          quantity: b.quantity,
-          unitPrice: b.unitPrice,
+          quantity: String(b.quantity),
+          unitPrice: String(b.unitPrice),
         })),
       });
     } else {
@@ -121,20 +125,20 @@ export default function BudgetModal({
     }
   }, [open, editingOrder]);
 
-  const total = form.items.reduce((acc, item) => acc + item.quantity * item.unitPrice, 0);
+  const total = form.items.reduce((acc, item) => acc + (Number(item.quantity) || 0) * (Number(item.unitPrice) || 0), 0);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (submitting) return;
 
     const items = form.items
-      .filter((i) => i.name.trim() !== "" && i.quantity > 0)
+      .filter((i) => i.name.trim() !== "" && Number(i.quantity) > 0)
       .map((i) => ({
         catalogItemId: undefined as string | undefined,
         name: i.name,
         type: i.type,
-        quantity: Number(i.quantity),
-        unitPrice: Number(i.unitPrice),
+        quantity: Number(i.quantity) || 0,
+        unitPrice: Number(i.unitPrice) || 0,
       }));
 
     onSubmit({
@@ -159,8 +163,8 @@ export default function BudgetModal({
         {
           name: catalogItem.name,
           type: catalogItem.type,
-          quantity: 1,
-          unitPrice: catalogItem.unitPrice,
+          quantity: "1",
+          unitPrice: String(catalogItem.unitPrice),
         },
       ],
     }));
@@ -169,7 +173,7 @@ export default function BudgetModal({
   const addFreeItem = () => {
     setForm((prev) => ({
       ...prev,
-      items: [...prev.items, { name: "", type: "material", quantity: 1, unitPrice: 0 }],
+      items: [...prev.items, { name: "", type: "material", quantity: "1", unitPrice: "" }],
     }));
   };
 
@@ -382,22 +386,41 @@ export default function BudgetModal({
                 <div className="col-span-4 sm:col-span-2">
                   <label className="text-xs text-graphite-400 block mb-1">Qtd</label>
                   <input
-                    type="number"
-                    min={0.01}
-                    step={0.01}
+                    type="text"
+                    inputMode="decimal"
                     value={item.quantity}
-                    onChange={(e) => updateItem(idx, { quantity: Number(e.target.value) })}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      // Aceita vazio, dígitos e um separador decimal enquanto digita.
+                      if (v === "" || /^\d*[.,]?\d*$/.test(v)) {
+                        updateItem(idx, { quantity: v.replace(",", ".") });
+                      }
+                    }}
+                    onBlur={() => {
+                      if (item.quantity === "" || Number(item.quantity) <= 0) {
+                        updateItem(idx, { quantity: "1" });
+                      }
+                    }}
+                    placeholder="1"
                     className="w-full h-10 rounded-xl border border-graphite-700 bg-graphite-900 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-450"
                   />
                 </div>
                 <div className="col-span-6 sm:col-span-3">
                   <label className="text-xs text-graphite-400 block mb-1">Valor Unit.</label>
                   <input
-                    type="number"
-                    min={0}
-                    step={0.01}
+                    type="text"
+                    inputMode="decimal"
                     value={item.unitPrice}
-                    onChange={(e) => updateItem(idx, { unitPrice: Number(e.target.value) })}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      if (v === "" || /^\d*[.,]?\d*$/.test(v)) {
+                        updateItem(idx, { unitPrice: v.replace(",", ".") });
+                      }
+                    }}
+                    onBlur={() => {
+                      if (item.unitPrice === "") updateItem(idx, { unitPrice: "0" });
+                    }}
+                    placeholder="0,00"
                     className="w-full h-10 rounded-xl border border-graphite-700 bg-graphite-900 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-450"
                   />
                 </div>
