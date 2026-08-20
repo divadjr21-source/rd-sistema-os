@@ -170,7 +170,7 @@ export default function ChamadoPage() {
                     name="fullName"
                     value={form.fullName}
                     onChange={handleChange}
-                    placeholder="Seu nome completo"
+                    placeholder="Nome/ Condominio"
                     required
                   />
                 </div>
