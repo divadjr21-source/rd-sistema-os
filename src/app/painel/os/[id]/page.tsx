@@ -53,7 +53,7 @@ import {
 } from "lucide-react";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
-import { toast, toastError } from "@/hooks/use-toast";
+import { toast, toastError, extractErrorMessage } from "@/hooks/use-toast";
 import { getCompany } from "@/services/storage";
 
 const statusOptions: OrderStatus[] = [
@@ -104,7 +104,7 @@ export default function OrderDetailPage() {
       }
       setCatalog(c);
     } catch (error) {
-      alert(error instanceof Error ? error.message : "Erro ao carregar a O.S.");
+      { console.error("Erro ao carregar a O.S.", error); alert(extractErrorMessage(error)); };
     }
   };
 
@@ -122,7 +122,7 @@ export default function OrderDetailPage() {
       toast({ title: "Status atualizado", variant: "success" });
     } catch (error) {
       if (previous) setOrder(previous);
-      alert(error instanceof Error ? error.message : "Não foi possível salvar o status.");
+      { console.error("Não foi possível salvar o status.", error); alert(extractErrorMessage(error)); };
     }
   };
 
@@ -136,7 +136,7 @@ export default function OrderDetailPage() {
       toast({ title: "Prioridade atualizada", variant: "success" });
     } catch (error) {
       if (previous) setOrder(previous);
-      alert(error instanceof Error ? error.message : "Não foi possível salvar a prioridade.");
+      { console.error("Não foi possível salvar a prioridade.", error); alert(extractErrorMessage(error)); };
     }
   };
 
@@ -153,7 +153,7 @@ export default function OrderDetailPage() {
       toast({ title: "Descrição salva", variant: "success" });
     } catch (error) {
       setDescriptionDraft(order.description);
-      alert(error instanceof Error ? error.message : "Não foi possível salvar a descrição.");
+      { console.error("Não foi possível salvar a descrição.", error); alert(extractErrorMessage(error)); };
     } finally {
       setSavingDescription(false);
     }
@@ -168,7 +168,7 @@ export default function OrderDetailPage() {
       setUpdates(history);
       setNewUpdate("");
     } catch (error) {
-      alert(error instanceof Error ? error.message : "Não foi possível salvar a tratativa.");
+      { console.error("Não foi possível salvar a tratativa.", error); alert(extractErrorMessage(error)); };
     } finally {
       setSendingUpdate(false);
     }
@@ -191,7 +191,7 @@ export default function OrderDetailPage() {
       setItemDialogOpen(false);
       toast({ title: "Item adicionado ao orçamento", variant: "success" });
     } catch (error) {
-      alert(error instanceof Error ? error.message : "Não foi possível adicionar o item.");
+      { console.error("Não foi possível adicionar o item.", error); alert(extractErrorMessage(error)); };
     } finally {
       setSavingItem(false);
     }
@@ -203,7 +203,7 @@ export default function OrderDetailPage() {
       const updated = await getOrderById(id);
       if (updated) setOrder(updated);
     } catch (error) {
-      alert(error instanceof Error ? error.message : "Não foi possível remover o item.");
+      { console.error("Não foi possível remover o item.", error); alert(extractErrorMessage(error)); };
     }
   };
 

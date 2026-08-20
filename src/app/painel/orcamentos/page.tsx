@@ -33,7 +33,7 @@ import {
 import BudgetModal from "@/components/budget-modal";
 import { Search, Eye, Send, FileText, Plus, Trash2, Pencil, AlertTriangle } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { toast } from "@/hooks/use-toast";
+import { toast, extractErrorMessage } from "@/hooks/use-toast";
 
 export default function OrcamentosPage() {
   const [orders, setOrders] = useState<OrderService[]>([]);
@@ -59,7 +59,7 @@ export default function OrcamentosPage() {
       setClients(c);
       setCatalog(cat);
     } catch (error) {
-      alert(error instanceof Error ? error.message : "Erro ao carregar orçamentos.");
+      { console.error("Erro ao carregar orçamentos.", error); alert(extractErrorMessage(error)); };
     }
   };
 
@@ -157,7 +157,7 @@ export default function OrcamentosPage() {
       setCreateModalOpen(false);
       toast({ title: "Orçamento salvo com sucesso", variant: "success" });
     } catch (error) {
-      alert(error instanceof Error ? error.message : "Não foi possível salvar o orçamento.");
+      { console.error("Não foi possível salvar o orçamento.", error); alert(extractErrorMessage(error)); };
     } finally {
       setSubmitting(false);
     }
@@ -191,7 +191,7 @@ export default function OrcamentosPage() {
       resetEditing();
       toast({ title: "Orçamento atualizado com sucesso", variant: "success" });
     } catch (error) {
-      alert(error instanceof Error ? error.message : "Não foi possível atualizar o orçamento.");
+      { console.error("Não foi possível atualizar o orçamento.", error); alert(extractErrorMessage(error)); };
     } finally {
       setSubmitting(false);
     }
@@ -211,7 +211,7 @@ export default function OrcamentosPage() {
       setOrderToDelete(null);
       toast({ title: "Orçamento excluído", variant: "success" });
     } catch (error) {
-      alert(error instanceof Error ? error.message : "Não foi possível excluir o orçamento.");
+      { console.error("Não foi possível excluir o orçamento.", error); alert(extractErrorMessage(error)); };
     }
   };
 

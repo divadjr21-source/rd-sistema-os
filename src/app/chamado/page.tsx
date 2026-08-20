@@ -9,6 +9,7 @@ import { createOrder, getCompany, uploadMediaFiles } from "@/services/storage";
 import { formatPhone, stripPhone, whatsappLink } from "@/lib/utils";
 import { Camera, Upload, CheckCircle, Phone, MapPin, User, FileText } from "lucide-react";
 import Link from "next/link";
+import { extractErrorMessage } from "@/hooks/use-toast";
 
 type MediaFile = {
   file: File;
@@ -91,11 +92,7 @@ export default function ChamadoPage() {
       setSubmitted(true);
       window.scrollTo({ top: 0, behavior: "smooth" });
     } catch (error) {
-      alert(
-        error instanceof Error
-          ? error.message
-          : "Não foi possível enviar o chamado. Verifique sua conexão e tente novamente."
-      );
+      { console.error("Não foi possível enviar o chamado. Verifique sua conexão e tente novamente.", error); alert(extractErrorMessage(error)); };
     } finally {
       setSubmitting(false);
     }

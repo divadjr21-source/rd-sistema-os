@@ -43,7 +43,7 @@ export function toast(input: { title: string; description?: string; variant?: To
 // erros do Supabase/PostgREST, que são objetos simples no formato
 // { message, details, hint, code } e NÃO são instâncias de Error — por
 // isso "error instanceof Error" sozinho não é suficiente para capturá-los.
-function extractErrorMessage(error: unknown): string {
+export function extractErrorMessage(error: unknown): string {
   if (error instanceof Error) return error.message;
   if (typeof error === "string") return error;
   if (error && typeof error === "object") {
