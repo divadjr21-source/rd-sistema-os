@@ -163,7 +163,7 @@ export default function ChamadoPage() {
               <div className="space-y-4">
                 <div className="space-y-1.5">
                   <Label htmlFor="fullName" className="flex items-center gap-2 text-graphite-200">
-                    <User className="w-4 h-4 text-emerald-450" /> Nome Completo
+                    <User className="w-4 h-4 text-emerald-450" /> Nome/ Condominio
                   </Label>
                   <Input
                     id="fullName"
