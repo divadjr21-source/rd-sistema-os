@@ -12,6 +12,7 @@ import {
   Appointment,
   AppointmentStatus,
   OrderPriority,
+  PaymentStatus,
 } from "@/types";
 
 const supabase = createSupabaseClient();
@@ -33,6 +34,7 @@ type DbOrder = {
   description: string;
   status: OrderStatus;
   priority: OrderPriority;
+  payment_status: string | null;
   budget_status: BudgetStatus | null;
   budget_approved_at: string | null;
   budget_rejected_at: string | null;
@@ -155,6 +157,7 @@ function mapOrder(row: DbOrder): OrderService {
     description: row.description,
     status: row.status,
     priority: row.priority || "media",
+    paymentStatus: (row.payment_status as PaymentStatus) || "aguardando",
     media: (row.order_media || []).map((m) => ({
       id: m.id,
       url: m.url,
@@ -590,6 +593,12 @@ export async function updateOrderStatus(id: string, status: OrderStatus): Promis
 
 export async function updateOrderPriority(id: string, priority: OrderPriority): Promise<OrderService | undefined> {
   const { error } = await supabase.from("orders").update({ priority }).eq("id", id);
+  if (error) throw error;
+  return getOrderById(id);
+}
+
+export async function updateOrderPaymentStatus(id: string, paymentStatus: PaymentStatus): Promise<OrderService | undefined> {
+  const { error } = await supabase.from("orders").update({ payment_status: paymentStatus }).eq("id", id);
   if (error) throw error;
   return getOrderById(id);
 }

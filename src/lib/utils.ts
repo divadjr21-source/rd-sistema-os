@@ -44,6 +44,16 @@ export const priorityColors: Record<string, string> = {
   alta: "bg-danger/15 text-danger border-danger/30",
 };
 
+export const paymentStatusLabels: Record<string, string> = {
+  aguardando: "Aguardando Pagamento",
+  paga: "Paga",
+};
+
+export const paymentStatusColors: Record<string, string> = {
+  aguardando: "bg-warning/15 text-warning border-warning/30",
+  paga: "bg-emerald-450/15 text-emerald-450 border-emerald-450/30",
+};
+
 export function generateOSNumber() {
   const prefix = new Date().getFullYear();
   const suffix = Math.floor(Math.random() * 9000) + 1000;

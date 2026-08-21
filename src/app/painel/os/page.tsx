@@ -1,10 +1,20 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { getOrders, getClients, createOrderManual, deleteOrder, uploadMediaFiles } from "@/services/storage";
-import { OrderService, Client, OrderStatus, OrderPriority } from "@/types";
-import { formatPhone, formatPhoneInput, statusLabels, statusColors, priorityLabels, priorityColors } from "@/lib/utils";
+import { OrderService, Client, OrderStatus, OrderPriority, PaymentStatus } from "@/types";
+import {
+  formatPhone,
+  formatPhoneInput,
+  statusLabels,
+  statusColors,
+  priorityLabels,
+  priorityColors,
+  paymentStatusLabels,
+  paymentStatusColors,
+} from "@/lib/utils";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -27,6 +37,7 @@ import {
 } from "@/components/ui/select";
 import { Search, Eye, Trash2, Plus, Upload, X, AlertTriangle, Pencil } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { extractErrorMessage } from "@/hooks/use-toast";
 
 const statusOptions: OrderStatus[] = [
   "pendente",
@@ -38,8 +49,10 @@ const statusOptions: OrderStatus[] = [
 ];
 
 const priorityOptions: OrderPriority[] = ["baixa", "media", "alta"];
+const paymentStatusOptions: PaymentStatus[] = ["aguardando", "paga"];
 
 export default function OrdersListPage() {
+  const router = useRouter();
   const [orders, setOrders] = useState<OrderService[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
   const [search, setSearch] = useState("");
@@ -67,6 +80,7 @@ export default function OrdersListPage() {
     description: "",
     status: "pendente" as OrderStatus,
     priority: "media" as OrderPriority,
+    paymentStatus: "aguardando" as PaymentStatus,
   });
 
   useEffect(() => {
@@ -99,6 +113,7 @@ export default function OrdersListPage() {
       description: order.description,
       status: order.status,
       priority: order.priority,
+      paymentStatus: order.paymentStatus,
     });
     setEditModalOpen(true);
   };
@@ -108,15 +123,20 @@ export default function OrdersListPage() {
     if (!editingOrder || submitting) return;
     setSubmitting(true);
     try {
-      const { updateOrderStatus, updateOrderPriority, updateOrderDescription } = await import("@/services/storage");
+      const { updateOrderStatus, updateOrderPriority, updateOrderDescription, updateOrderPaymentStatus } =
+        await import("@/services/storage");
       await Promise.all([
         updateOrderDescription(editingOrder.id, editForm.description),
         updateOrderStatus(editingOrder.id, editForm.status),
         updateOrderPriority(editingOrder.id, editForm.priority),
+        updateOrderPaymentStatus(editingOrder.id, editForm.paymentStatus),
       ]);
       await refresh();
       setEditModalOpen(false);
       setEditingOrder(null);
+      router.refresh();
+    } catch (error) {
+      alert(extractErrorMessage(error));
     } finally {
       setSubmitting(false);
     }
@@ -412,6 +432,7 @@ export default function OrdersListPage() {
                 <th className="py-3 px-3 font-medium">Telefone</th>
                 <th className="py-3 px-3 font-medium">Status</th>
                 <th className="py-3 px-3 font-medium">Prioridade</th>
+                <th className="py-3 px-3 font-medium">Pagamento</th>
                 <th className="py-3 px-3 font-medium">Abertura</th>
                 <th className="py-3 px-3 font-medium text-right">Ações</th>
               </tr>
@@ -440,6 +461,16 @@ export default function OrdersListPage() {
                       )}
                     >
                       {priorityLabels[order.priority]}
+                    </span>
+                  </td>
+                  <td className="py-3 px-3">
+                    <span
+                      className={cn(
+                        "text-xs px-2 py-0.5 rounded-full border whitespace-nowrap",
+                        paymentStatusColors[order.paymentStatus]
+                      )}
+                    >
+                      {paymentStatusLabels[order.paymentStatus]}
                     </span>
                   </td>
                   <td className="py-3 px-3 text-graphite-400">{new Date(order.createdAt).toLocaleDateString("pt-BR")}</td>
@@ -547,6 +578,23 @@ export default function OrdersListPage() {
                   </SelectContent>
                 </Select>
               </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="edit-payment">Pagamento</Label>
+              <Select
+                value={editForm.paymentStatus}
+                onValueChange={(v) => setEditForm({ ...editForm, paymentStatus: v as PaymentStatus })}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {paymentStatusOptions.map((p) => (
+                    <SelectItem key={p} value={p}>{paymentStatusLabels[p]}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
 
             <DialogFooter>

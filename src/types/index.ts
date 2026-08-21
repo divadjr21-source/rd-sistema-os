@@ -8,6 +8,8 @@ export type OrderStatus =
 
 export type OrderPriority = "baixa" | "media" | "alta";
 
+export type PaymentStatus = "aguardando" | "paga";
+
 export type BudgetStatus = "pendente" | "aprovado" | "recusado";
 
 export interface Client {
@@ -33,6 +35,7 @@ export interface OrderService {
   description: string;
   status: OrderStatus;
   priority: OrderPriority;
+  paymentStatus: PaymentStatus;
   media: MediaFile[];
   createdAt: string;
   budgetItems?: BudgetItem[];

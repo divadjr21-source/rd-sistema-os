@@ -25,6 +25,7 @@ import {
   getCatalog,
   updateOrderStatus,
   updateOrderPriority,
+  updateOrderPaymentStatus,
   updateOrderDescription,
   addOrderUpdate,
   getOrderUpdates,
@@ -34,8 +35,8 @@ import {
   getMyProfile,
   MyProfile,
 } from "@/services/storage";
-import { OrderService, OrderStatus, OrderPriority, CatalogItem } from "@/types";
-import { formatCurrency, formatPhone, statusLabels, priorityLabels, priorityColors } from "@/lib/utils";
+import { OrderService, OrderStatus, OrderPriority, PaymentStatus, CatalogItem } from "@/types";
+import { formatCurrency, formatPhone, statusLabels, priorityLabels, priorityColors, paymentStatusLabels, paymentStatusColors } from "@/lib/utils";
 import { cn } from "@/lib/utils";
 import {
   ArrowLeft,
@@ -69,6 +70,7 @@ const statusOptions: OrderStatus[] = [
 ];
 
 const priorityOptions: OrderPriority[] = ["baixa", "media", "alta"];
+const paymentStatusOptions: PaymentStatus[] = ["aguardando", "paga"];
 
 export default function OrderDetailPage() {
   const params = useParams();
@@ -169,6 +171,21 @@ export default function OrderDetailPage() {
     } catch (error) {
       if (previous) setOrder(previous);
       { console.error("Não foi possível salvar a prioridade.", error); alert(extractErrorMessage(error)); };
+    }
+  };
+
+  const handlePaymentStatusChange = async (paymentStatus: PaymentStatus) => {
+    const previous = order;
+    if (order) setOrder({ ...order, paymentStatus });
+    try {
+      await updateOrderPaymentStatus(id, paymentStatus);
+      const updated = await getOrderById(id);
+      if (updated) setOrder(updated);
+      toast({ title: "Pagamento atualizado", variant: "success" });
+      router.refresh();
+    } catch (error) {
+      if (previous) setOrder(previous);
+      { console.error("Não foi possível salvar o pagamento.", error); alert(extractErrorMessage(error)); };
     }
   };
 
@@ -445,6 +462,16 @@ export default function OrderDetailPage() {
               ))}
             </SelectContent>
           </Select>
+          <Select value={order.paymentStatus} onValueChange={(v) => handlePaymentStatusChange(v as PaymentStatus)}>
+            <SelectTrigger className="w-[190px]">
+              <SelectValue placeholder="Pagamento" />
+            </SelectTrigger>
+            <SelectContent>
+              {paymentStatusOptions.map((p) => (
+                <SelectItem key={p} value={p}>{paymentStatusLabels[p]}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
           <Button variant="outline" onClick={generatePDF} className="gap-2">
             <FileDown className="w-4 h-4" /> PDF
           </Button>
@@ -470,6 +497,14 @@ export default function OrderDetailPage() {
                   )}
                 >
                   {priorityLabels[order.priority]}
+                </span>
+                <span
+                  className={cn(
+                    "text-xs px-2 py-1 rounded-full border font-medium whitespace-nowrap",
+                    paymentStatusColors[order.paymentStatus]
+                  )}
+                >
+                  {paymentStatusLabels[order.paymentStatus]}
                 </span>
               </div>
             </div>
