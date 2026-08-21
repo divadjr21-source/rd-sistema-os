@@ -40,6 +40,7 @@ export interface OrderService {
   budgetApprovedAt?: string;
   budgetRejectedAt?: string;
   budgetRejectionReason?: string;
+  assignedTechnicianId?: string;
 }
 
 export interface CatalogItem {

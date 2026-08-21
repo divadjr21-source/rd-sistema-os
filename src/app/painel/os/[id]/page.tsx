@@ -30,6 +30,9 @@ import {
   getOrderUpdates,
   addBudgetItem,
   removeBudgetItem,
+  assignOrderTechnician,
+  getMyProfile,
+  MyProfile,
 } from "@/services/storage";
 import { OrderService, OrderStatus, OrderPriority, CatalogItem } from "@/types";
 import { formatCurrency, formatPhone, statusLabels, priorityLabels, priorityColors } from "@/lib/utils";
@@ -88,10 +91,36 @@ export default function OrderDetailPage() {
   const [descriptionDraft, setDescriptionDraft] = useState("");
   const [savingDescription, setSavingDescription] = useState(false);
   const [savingItem, setSavingItem] = useState(false);
+  const [profile, setProfile] = useState<MyProfile | null>(null);
+  const [technicians, setTechnicians] = useState<{ id: string; full_name: string }[]>([]);
+  const [assigning, setAssigning] = useState(false);
 
   useEffect(() => {
     refresh();
+    getMyProfile().then((p) => {
+      setProfile(p);
+      if (p?.role === "admin") {
+        fetch("/api/admin/technicians")
+          .then((r) => r.json())
+          .then((data) => setTechnicians((data.profiles || []).filter((t: { role: string }) => t.role === "tecnico")))
+          .catch(() => {});
+      }
+    });
   }, [id]);
+
+  const handleAssignTechnician = async (technicianId: string) => {
+    if (!order || assigning) return;
+    setAssigning(true);
+    try {
+      const updated = await assignOrderTechnician(id, technicianId === "none" ? null : technicianId);
+      if (updated) setOrder(updated);
+      toast({ title: "Técnico atribuído", variant: "success" });
+    } catch (error) {
+      alert(extractErrorMessage(error));
+    } finally {
+      setAssigning(false);
+    }
+  };
 
   const refresh = async () => {
     try {
@@ -446,6 +475,34 @@ export default function OrderDetailPage() {
               <Info icon={MapPin} label="Endereço" value={order.client.address} />
               <Info icon={Calendar} label="Abertura" value={new Date(order.createdAt).toLocaleString("pt-BR")} />
             </div>
+
+            {profile?.role === "admin" && (
+              <div className="mt-5">
+                <Label className="text-graphite-300 mb-1.5 block">Técnico Responsável</Label>
+                <Select
+                  value={order.assignedTechnicianId || "none"}
+                  onValueChange={handleAssignTechnician}
+                  disabled={assigning}
+                >
+                  <SelectTrigger className="bg-graphite-950 max-w-xs">
+                    <SelectValue placeholder="Nenhum técnico atribuído" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">Nenhum (não atribuída)</SelectItem>
+                    {technicians.map((t) => (
+                      <SelectItem key={t.id} value={t.id}>
+                        {t.full_name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {!order.assignedTechnicianId && (
+                  <p className="text-xs text-amber-400 mt-1.5">
+                    Sem técnico atribuído, esta O.S. só aparece para administradores.
+                  </p>
+                )}
+              </div>
+            )}
 
             <div className="mt-5">
               <Label className="text-graphite-300 mb-1.5 block flex items-center gap-2">

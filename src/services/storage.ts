@@ -37,6 +37,7 @@ type DbOrder = {
   budget_approved_at: string | null;
   budget_rejected_at: string | null;
   budget_rejection_reason: string | null;
+  assigned_technician_id: string | null;
   created_at: string;
   clients: DbClient | null;
   order_media: { id: string; url: string; type: "image" | "video"; name: string }[] | null;
@@ -166,6 +167,7 @@ function mapOrder(row: DbOrder): OrderService {
     budgetApprovedAt: row.budget_approved_at || undefined,
     budgetRejectedAt: row.budget_rejected_at || undefined,
     budgetRejectionReason: row.budget_rejection_reason || undefined,
+    assignedTechnicianId: row.assigned_technician_id || undefined,
   };
 }
 
@@ -238,6 +240,27 @@ export async function isAuthenticated(): Promise<boolean> {
     data: { user },
   } = await supabase.auth.getUser();
   return !!user;
+}
+
+export type MyProfile = {
+  id: string;
+  fullName: string;
+  role: "admin" | "tecnico";
+  active: boolean;
+};
+
+export async function getMyProfile(): Promise<MyProfile | null> {
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return null;
+  const { data, error } = await supabase
+    .from("profiles")
+    .select("id, full_name, role, active")
+    .eq("id", user.id)
+    .single();
+  if (error || !data) return null;
+  return { id: data.id, fullName: data.full_name, role: data.role, active: data.active };
 }
 
 // --- Clients ---
@@ -519,6 +542,9 @@ export async function createOrderManual(data: {
   media: { url: string; type: "image" | "video"; name: string }[];
 }): Promise<OrderService> {
   const client = await createClient(data.client);
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
   const { data: orderRow, error } = await supabase
     .from("orders")
     .insert({
@@ -527,6 +553,10 @@ export async function createOrderManual(data: {
       status: data.status,
       budget_status: "pendente",
       priority: data.priority || "media",
+      // Atribui automaticamente a quem está criando, senão um técnico
+      // perderia de vista a própria O.S. assim que criasse (as regras de
+      // segurança só mostram a ele o que está atribuído a ele).
+      assigned_technician_id: user?.id || null,
     })
     .select(
       `
@@ -560,6 +590,12 @@ export async function updateOrderStatus(id: string, status: OrderStatus): Promis
 
 export async function updateOrderPriority(id: string, priority: OrderPriority): Promise<OrderService | undefined> {
   const { error } = await supabase.from("orders").update({ priority }).eq("id", id);
+  if (error) throw error;
+  return getOrderById(id);
+}
+
+export async function assignOrderTechnician(id: string, technicianId: string | null): Promise<OrderService | undefined> {
+  const { error } = await supabase.from("orders").update({ assigned_technician_id: technicianId }).eq("id", id);
   if (error) throw error;
   return getOrderById(id);
 }

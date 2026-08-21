@@ -163,14 +163,14 @@ export default function ChamadoPage() {
               <div className="space-y-4">
                 <div className="space-y-1.5">
                   <Label htmlFor="fullName" className="flex items-center gap-2 text-graphite-200">
-                    <User className="w-4 h-4 text-emerald-450" /> Nome/ Condominio
+                    <User className="w-4 h-4 text-emerald-450" /> Nome/Condomínio
                   </Label>
                   <Input
                     id="fullName"
                     name="fullName"
                     value={form.fullName}
                     onChange={handleChange}
-                    placeholder="Nome/ Condominio"
+                    placeholder="Seu nome ou o nome do condomínio"
                     required
                   />
                 </div>

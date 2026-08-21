@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
-import { isAuthenticated, logout } from "@/services/storage";
+import { isAuthenticated, logout, getMyProfile, MyProfile } from "@/services/storage";
 import {
   LayoutDashboard,
   ClipboardList,
@@ -17,21 +17,26 @@ import {
   CalendarDays,
   Receipt,
   BarChart3,
+  UserCog,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 const nav = [
-  { href: "/painel", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/painel/os", label: "Ordens de Serviço", icon: ClipboardList },
-  { href: "/painel/orcamentos", label: "Orçamentos", icon: FileText },
-  { href: "/painel/agenda", label: "Agenda", icon: CalendarDays },
-  { href: "/painel/contratos", label: "Contratos", icon: Receipt },
-  { href: "/painel/catalogo", label: "Catálogo", icon: Tags },
-  { href: "/painel/clientes", label: "Clientes", icon: Users },
-  { href: "/painel/relatorios", label: "Relatórios", icon: BarChart3 },
-  { href: "/painel/empresa", label: "Empresa", icon: Building2 },
+  { href: "/painel", label: "Dashboard", icon: LayoutDashboard, adminOnly: false },
+  { href: "/painel/os", label: "Ordens de Serviço", icon: ClipboardList, adminOnly: false },
+  { href: "/painel/orcamentos", label: "Orçamentos", icon: FileText, adminOnly: false },
+  { href: "/painel/agenda", label: "Agenda", icon: CalendarDays, adminOnly: false },
+  { href: "/painel/contratos", label: "Contratos", icon: Receipt, adminOnly: false },
+  { href: "/painel/catalogo", label: "Catálogo", icon: Tags, adminOnly: false },
+  { href: "/painel/clientes", label: "Clientes", icon: Users, adminOnly: false },
+  { href: "/painel/relatorios", label: "Relatórios", icon: BarChart3, adminOnly: true },
+  { href: "/painel/usuarios", label: "Usuários", icon: UserCog, adminOnly: true },
+  { href: "/painel/empresa", label: "Empresa", icon: Building2, adminOnly: true },
 ];
+
+// Rotas que só o Admin pode acessar, mesmo digitando o link direto.
+const ADMIN_ONLY_PREFIXES = ["/painel/relatorios", "/painel/usuarios", "/painel/empresa"];
 
 export default function PanelLayout({
   children,
@@ -42,16 +47,31 @@ export default function PanelLayout({
   const pathname = usePathname();
   const [loading, setLoading] = useState(true);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [profile, setProfile] = useState<MyProfile | null>(null);
 
   useEffect(() => {
-    isAuthenticated().then((ok) => {
+    isAuthenticated().then(async (ok) => {
       if (!ok) {
         router.replace("/login");
-      } else {
-        setLoading(false);
+        return;
       }
+      const p = await getMyProfile();
+      if (p && !p.active) {
+        await logout();
+        router.replace("/login");
+        return;
+      }
+      setProfile(p);
+      // Bloqueia acesso direto a rotas de admin digitando a URL.
+      if (p && p.role !== "admin" && ADMIN_ONLY_PREFIXES.some((prefix) => pathname.startsWith(prefix))) {
+        router.replace("/painel");
+        return;
+      }
+      setLoading(false);
     });
-  }, [router]);
+  }, [router, pathname]);
+
+  const visibleNav = nav.filter((item) => !item.adminOnly || profile?.role === "admin");
 
   const handleLogout = async () => {
     await logout();
@@ -79,7 +99,7 @@ export default function PanelLayout({
           </div>
         </div>
         <nav className="flex-1 px-3 py-4 space-y-1">
-          {nav.map((item) => {
+          {visibleNav.map((item) => {
             const Icon = item.icon;
             const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
             return (
@@ -125,7 +145,7 @@ export default function PanelLayout({
 
         {mobileOpen && (
           <div className="lg:hidden bg-graphite-900 border-b border-graphite-800 p-3 space-y-1">
-            {nav.map((item) => {
+            {visibleNav.map((item) => {
               const Icon = item.icon;
               const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
               return (
