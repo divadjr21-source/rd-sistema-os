@@ -139,8 +139,13 @@ export default function AgendaPage() {
   }, [monthRangeKey]);
 
   const refresh = async () => {
-    const start = `${year}-${String(month + 1).padStart(2, "0")}-01`;
-    const end = `${year}-${String(month + 1).padStart(2, "0")}-${String(daysInMonth).padStart(2, "0")}`;
+    // Usa o fuso do Brasil explicitamente e cobre o último dia do mês por
+    // inteiro (até 23:59:59), não só até a meia-noite — senão qualquer
+    // compromisso marcado para o próprio último dia do mês "desaparecia"
+    // da Agenda mesmo continuando a existir no banco.
+    const lastDay = String(daysInMonth).padStart(2, "0");
+    const start = buildBrazilTimestamp(`${year}-${String(month + 1).padStart(2, "0")}-01`, "00:00");
+    const end = `${year}-${String(month + 1).padStart(2, "0")}-${lastDay}T23:59:59-03:00`;
     const [a, o] = await Promise.all([getAppointments(start, end), getOrders()]);
     setAppointments(a);
     setOrders(o);
