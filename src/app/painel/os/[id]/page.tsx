@@ -115,6 +115,7 @@ export default function OrderDetailPage() {
       const updated = await assignOrderTechnician(id, technicianId === "none" ? null : technicianId);
       if (updated) setOrder(updated);
       toast({ title: "Técnico atribuído", variant: "success" });
+      router.refresh();
     } catch (error) {
       alert(extractErrorMessage(error));
     } finally {
@@ -149,6 +150,7 @@ export default function OrderDetailPage() {
       const updated = await getOrderById(id);
       if (updated) setOrder(updated);
       toast({ title: "Status atualizado", variant: "success" });
+      router.refresh();
     } catch (error) {
       if (previous) setOrder(previous);
       { console.error("Não foi possível salvar o status.", error); alert(extractErrorMessage(error)); };
@@ -163,6 +165,7 @@ export default function OrderDetailPage() {
       const updated = await getOrderById(id);
       if (updated) setOrder(updated);
       toast({ title: "Prioridade atualizada", variant: "success" });
+      router.refresh();
     } catch (error) {
       if (previous) setOrder(previous);
       { console.error("Não foi possível salvar a prioridade.", error); alert(extractErrorMessage(error)); };
@@ -180,6 +183,7 @@ export default function OrderDetailPage() {
       await updateOrderDescription(id, descriptionDraft);
       setOrder({ ...order, description: descriptionDraft });
       toast({ title: "Descrição salva", variant: "success" });
+      router.refresh();
     } catch (error) {
       setDescriptionDraft(order.description);
       { console.error("Não foi possível salvar a descrição.", error); alert(extractErrorMessage(error)); };
@@ -219,6 +223,7 @@ export default function OrderDetailPage() {
       setNewItem({ name: "", type: "material", quantity: "1", unitPrice: "" });
       setItemDialogOpen(false);
       toast({ title: "Item adicionado ao orçamento", variant: "success" });
+      router.refresh();
     } catch (error) {
       { console.error("Não foi possível adicionar o item.", error); alert(extractErrorMessage(error)); };
     } finally {

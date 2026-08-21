@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -75,6 +76,7 @@ function localDateKey(date: Date) {
 }
 
 export default function AgendaPage() {
+  const router = useRouter();
   const [currentDate, setCurrentDate] = useState(() => toLocalNoon(new Date()));
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [orders, setOrders] = useState<OrderService[]>([]);
@@ -219,6 +221,7 @@ export default function AgendaPage() {
       setModalOpen(false);
       resetForm();
       toast({ title: editingId ? "Agendamento atualizado" : "Agendamento criado", variant: "success" });
+      router.refresh();
     } catch (error: unknown) {
       toastError(error, "Não foi possível salvar o agendamento");
     } finally {
@@ -239,6 +242,10 @@ export default function AgendaPage() {
       setDeleteModalOpen(false);
       setAppointmentToDelete(null);
       toast({ title: "Agendamento excluído", variant: "success" });
+      // Invalida o cache de navegação do Next.js para que outras telas
+      // (ex: Dashboard) busquem os dados atualizados na próxima visita,
+      // em vez de mostrar a versão antiga guardada em cache por até 30s.
+      router.refresh();
     } catch (error) {
       toastError(error, "Não foi possível excluir o agendamento");
     }

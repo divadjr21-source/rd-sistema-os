@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -33,6 +34,7 @@ import { cn } from "@/lib/utils";
 import { toast, toastError } from "@/hooks/use-toast";
 
 export default function ContractsPage() {
+  const router = useRouter();
   const [contracts, setContracts] = useState<Contract[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
   const [search, setSearch] = useState("");
@@ -124,6 +126,7 @@ export default function ContractsPage() {
       setModalOpen(false);
       resetForm();
       toast({ title: editingId ? "Contrato atualizado" : "Contrato criado", variant: "success" });
+      router.refresh();
     } catch (error: unknown) {
       toastError(error, "Não foi possível salvar o contrato");
     } finally {
@@ -144,6 +147,7 @@ export default function ContractsPage() {
       setDeleteModalOpen(false);
       setContractToDelete(null);
       toast({ title: "Contrato excluído", variant: "success" });
+      router.refresh();
     } catch (error) {
       toastError(error, "Não foi possível excluir o contrato");
     }

@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import {
@@ -36,6 +37,7 @@ import { cn } from "@/lib/utils";
 import { toast, extractErrorMessage } from "@/hooks/use-toast";
 
 export default function OrcamentosPage() {
+  const router = useRouter();
   const [orders, setOrders] = useState<OrderService[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
   const [catalog, setCatalog] = useState<CatalogItem[]>([]);
@@ -156,6 +158,7 @@ export default function OrcamentosPage() {
       await refresh();
       setCreateModalOpen(false);
       toast({ title: "Orçamento salvo com sucesso", variant: "success" });
+      router.refresh();
     } catch (error) {
       { console.error("Não foi possível salvar o orçamento.", error); alert(extractErrorMessage(error)); };
     } finally {
@@ -190,6 +193,7 @@ export default function OrcamentosPage() {
       setEditModalOpen(false);
       resetEditing();
       toast({ title: "Orçamento atualizado com sucesso", variant: "success" });
+      router.refresh();
     } catch (error) {
       { console.error("Não foi possível atualizar o orçamento.", error); alert(extractErrorMessage(error)); };
     } finally {
@@ -210,6 +214,7 @@ export default function OrcamentosPage() {
       setDeleteModalOpen(false);
       setOrderToDelete(null);
       toast({ title: "Orçamento excluído", variant: "success" });
+      router.refresh();
     } catch (error) {
       { console.error("Não foi possível excluir o orçamento.", error); alert(extractErrorMessage(error)); };
     }
