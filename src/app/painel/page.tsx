@@ -4,7 +4,7 @@ import { useEffect, useState, useMemo } from "react";
 import Link from "next/link";
 import { getOrders, getPendingInvoices, markInvoiceAsSent, getAppointments } from "@/services/storage";
 import { OrderService, OrderStatus } from "@/types";
-import { formatCurrency, statusLabels, statusColors, priorityLabels, priorityColors, toBrazilDateKey } from "@/lib/utils";
+import { formatCurrency, statusLabels, statusColors, priorityLabels, priorityColors, paymentStatusLabels, paymentStatusColors, toBrazilDateKey } from "@/lib/utils";
 import {
   ClipboardList,
   DollarSign,
@@ -327,6 +327,14 @@ export default function DashboardPage() {
                               )}
                             >
                               {priorityLabels[order.priority]}
+                            </span>
+                            <span
+                              className={cn(
+                                "inline-block text-[10px] px-2 py-0.5 rounded-full border whitespace-nowrap",
+                                paymentStatusColors[order.paymentStatus]
+                              )}
+                            >
+                              {paymentStatusLabels[order.paymentStatus]}
                             </span>
                           </div>
                         </div>
