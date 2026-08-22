@@ -60,23 +60,27 @@ export async function GET() {
   return NextResponse.json({ profiles: withEmail });
 }
 
-// POST: convida um novo técnico por e-mail
+// POST: cria um novo técnico já com e-mail e senha definidos pelo admin
 export async function POST(req: NextRequest) {
   const check = await requireAdmin();
   if ("error" in check) return NextResponse.json({ error: check.error }, { status: check.status });
 
   try {
-    const { email, fullName } = await req.json();
-    if (!email || !fullName) {
-      return NextResponse.json({ error: "Nome e e-mail são obrigatórios." }, { status: 400 });
+    const { email, fullName, password } = await req.json();
+    if (!email || !fullName || !password) {
+      return NextResponse.json({ error: "Nome, e-mail e senha são obrigatórios." }, { status: 400 });
+    }
+    if (password.length < 6) {
+      return NextResponse.json({ error: "A senha precisa ter pelo menos 6 caracteres." }, { status: 400 });
     }
 
     const admin = getAdminClient();
-    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || req.nextUrl.origin;
 
-    const { data, error } = await admin.auth.admin.inviteUserByEmail(email, {
-      data: { full_name: fullName, role: "tecnico" },
-      redirectTo: `${siteUrl}/definir-senha`,
+    const { data, error } = await admin.auth.admin.createUser({
+      email,
+      password,
+      email_confirm: true, // não exige confirmação por e-mail, login já libera na hora
+      user_metadata: { full_name: fullName, role: "tecnico" },
     });
 
     if (error) throw error;
@@ -88,9 +92,67 @@ export async function POST(req: NextRequest) {
         .upsert({ id: data.user.id, full_name: fullName, role: "tecnico", active: true }, { onConflict: "id" });
     }
 
+    return NextResponse.json({ ok: true, email, password });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Não foi possível cadastrar o técnico.";
+    return NextResponse.json({ error: message }, { status: 400 });
+  }
+}
+
+// PUT: admin redefine a senha de um técnico já cadastrado
+export async function PUT(req: NextRequest) {
+  const check = await requireAdmin();
+  if ("error" in check) return NextResponse.json({ error: check.error }, { status: check.status });
+
+  try {
+    const { id, password } = await req.json();
+    if (!id || !password) {
+      return NextResponse.json({ error: "Parâmetros inválidos." }, { status: 400 });
+    }
+    if (password.length < 6) {
+      return NextResponse.json({ error: "A senha precisa ter pelo menos 6 caracteres." }, { status: 400 });
+    }
+
+    const admin = getAdminClient();
+    const { error } = await admin.auth.admin.updateUserById(id, { password });
+    if (error) throw error;
+
     return NextResponse.json({ ok: true });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Não foi possível convidar o técnico.";
+    const message = error instanceof Error ? error.message : "Não foi possível redefinir a senha.";
+    return NextResponse.json({ error: message }, { status: 400 });
+  }
+}
+
+// DELETE: exclui definitivamente o cadastro do técnico
+export async function DELETE(req: NextRequest) {
+  const check = await requireAdmin();
+  if ("error" in check) return NextResponse.json({ error: check.error }, { status: check.status });
+
+  try {
+    const { id } = await req.json();
+    if (!id) return NextResponse.json({ error: "Parâmetros inválidos." }, { status: 400 });
+
+    if (id === check.user.id) {
+      return NextResponse.json({ error: "Você não pode excluir a própria conta." }, { status: 400 });
+    }
+
+    const admin = getAdminClient();
+
+    const { data: profile } = await admin.from("profiles").select("role").eq("id", id).single();
+    if (profile?.role === "admin") {
+      return NextResponse.json({ error: "Não é possível excluir uma conta de administrador." }, { status: 400 });
+    }
+
+    // Exclui do Auth — a exclusão em profiles acontece automaticamente
+    // (ON DELETE CASCADE). As O.S. atribuídas a esse técnico ficam sem
+    // técnico atribuído, sem serem apagadas.
+    const { error } = await admin.auth.admin.deleteUser(id);
+    if (error) throw error;
+
+    return NextResponse.json({ ok: true });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Não foi possível excluir o técnico.";
     return NextResponse.json({ error: message }, { status: 400 });
   }
 }
