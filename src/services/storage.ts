@@ -13,6 +13,9 @@ import {
   AppointmentStatus,
   OrderPriority,
   PaymentStatus,
+  CostProject,
+  CostProjectPurchase,
+  CostProjectTechnicianDay,
 } from "@/types";
 
 const supabase = createSupabaseClient();
@@ -1017,5 +1020,200 @@ export async function updateAppointment(
 
 export async function deleteAppointment(id: string): Promise<void> {
   const { error } = await supabase.from("appointments").delete().eq("id", id);
+  if (error) throw error;
+}
+
+// --- Custos / Projetos ---
+
+type DbCostProject = {
+  id: string;
+  order_id: string;
+  project_value: number;
+  created_at: string;
+  orders: DbOrder | null;
+  cost_project_purchases: DbCostPurchase[] | null;
+  cost_project_technician_days: DbCostTechnicianDay[] | null;
+};
+
+type DbCostPurchase = {
+  id: string;
+  project_id: string;
+  purchase_date: string;
+  supplier: string;
+  description: string;
+  cost: number;
+  created_at: string;
+};
+
+type DbCostTechnicianDay = {
+  id: string;
+  project_id: string;
+  work_date: string;
+  technician_name: string;
+  service_description: string;
+  daily_rate: number;
+  created_at: string;
+};
+
+function mapCostPurchase(row: DbCostPurchase): CostProjectPurchase {
+  return {
+    id: row.id,
+    projectId: row.project_id,
+    purchaseDate: row.purchase_date,
+    supplier: row.supplier,
+    description: row.description,
+    cost: Number(row.cost),
+    createdAt: row.created_at,
+  };
+}
+
+function mapCostTechnicianDay(row: DbCostTechnicianDay): CostProjectTechnicianDay {
+  return {
+    id: row.id,
+    projectId: row.project_id,
+    workDate: row.work_date,
+    technicianName: row.technician_name,
+    serviceDescription: row.service_description,
+    dailyRate: Number(row.daily_rate),
+    createdAt: row.created_at,
+  };
+}
+
+function mapCostProject(row: DbCostProject): CostProject {
+  return {
+    id: row.id,
+    orderId: row.order_id,
+    order: row.orders ? mapOrder(row.orders) : undefined,
+    projectValue: Number(row.project_value),
+    purchases: (row.cost_project_purchases || []).map(mapCostPurchase),
+    technicianDays: (row.cost_project_technician_days || []).map(mapCostTechnicianDay),
+    createdAt: row.created_at,
+  };
+}
+
+const COST_PROJECT_SELECT = `
+  *,
+  orders(*, clients(*), order_media(*), budget_items(*)),
+  cost_project_purchases(*),
+  cost_project_technician_days(*)
+`;
+
+export async function getCostProjects(): Promise<CostProject[]> {
+  const { data, error } = await supabase
+    .from("cost_projects")
+    .select(COST_PROJECT_SELECT)
+    .order("created_at", { ascending: false });
+  if (error) throw error;
+  return (data || []).map(mapCostProject);
+}
+
+export async function getCostProjectById(id: string): Promise<CostProject | undefined> {
+  const { data, error } = await supabase.from("cost_projects").select(COST_PROJECT_SELECT).eq("id", id).single();
+  if (error) {
+    if (error.code === "PGRST116") return undefined; // not found
+    throw error;
+  }
+  return mapCostProject(data);
+}
+
+// Ordens de Serviço que ainda NÃO têm um Projeto de Custos vinculado
+// (usado na busca ao criar um projeto novo).
+export async function getOrdersWithoutCostProject(): Promise<OrderService[]> {
+  const [allOrders, { data: linked, error }] = await Promise.all([
+    getOrders(),
+    supabase.from("cost_projects").select("order_id"),
+  ]);
+  if (error) throw error;
+  const linkedIds = new Set((linked || []).map((r) => r.order_id));
+  return allOrders.filter((o) => !linkedIds.has(o.id));
+}
+
+export async function createCostProject(orderId: string, projectValue: number): Promise<CostProject> {
+  const { data, error } = await supabase
+    .from("cost_projects")
+    .insert({ order_id: orderId, project_value: projectValue })
+    .select(COST_PROJECT_SELECT)
+    .single();
+  if (error) throw error;
+  return mapCostProject(data);
+}
+
+export async function updateCostProjectValue(id: string, projectValue: number): Promise<void> {
+  const { error } = await supabase.from("cost_projects").update({ project_value: projectValue }).eq("id", id);
+  if (error) throw error;
+}
+
+export async function deleteCostProject(id: string): Promise<void> {
+  const { error } = await supabase.from("cost_projects").delete().eq("id", id);
+  if (error) throw error;
+}
+
+export async function addCostPurchase(
+  projectId: string,
+  data: { purchaseDate: string; supplier: string; description: string; cost: number }
+): Promise<void> {
+  const { error } = await supabase.from("cost_project_purchases").insert({
+    project_id: projectId,
+    purchase_date: data.purchaseDate,
+    supplier: data.supplier,
+    description: data.description,
+    cost: data.cost,
+  });
+  if (error) throw error;
+}
+
+export async function updateCostPurchase(
+  id: string,
+  data: { purchaseDate: string; supplier: string; description: string; cost: number }
+): Promise<void> {
+  const { error } = await supabase
+    .from("cost_project_purchases")
+    .update({
+      purchase_date: data.purchaseDate,
+      supplier: data.supplier,
+      description: data.description,
+      cost: data.cost,
+    })
+    .eq("id", id);
+  if (error) throw error;
+}
+
+export async function deleteCostPurchase(id: string): Promise<void> {
+  const { error } = await supabase.from("cost_project_purchases").delete().eq("id", id);
+  if (error) throw error;
+}
+
+export async function addCostTechnicianDay(
+  projectId: string,
+  data: { workDate: string; technicianName: string; serviceDescription: string; dailyRate: number }
+): Promise<void> {
+  const { error } = await supabase.from("cost_project_technician_days").insert({
+    project_id: projectId,
+    work_date: data.workDate,
+    technician_name: data.technicianName,
+    service_description: data.serviceDescription,
+    daily_rate: data.dailyRate,
+  });
+  if (error) throw error;
+}
+
+export async function updateCostTechnicianDay(
+  id: string,
+  data: { workDate: string; technicianName: string; serviceDescription: string; dailyRate: number }
+): Promise<void> {
+  const { error } = await supabase
+    .from("cost_project_technician_days")
+    .update({
+      work_date: data.workDate,
+      technician_name: data.technicianName,
+      service_description: data.serviceDescription,
+      daily_rate: data.dailyRate,
+    })
+    .eq("id", id);
+  if (error) throw error;
+}
+
+export async function deleteCostTechnicianDay(id: string): Promise<void> {
+  const { error } = await supabase.from("cost_project_technician_days").delete().eq("id", id);
   if (error) throw error;
 }

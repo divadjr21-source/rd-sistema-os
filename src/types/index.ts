@@ -112,3 +112,35 @@ export interface Appointment {
   createdAt: string;
 }
 
+// --- Custos / Projetos ---
+
+export interface CostProjectPurchase {
+  id: string;
+  projectId: string;
+  purchaseDate: string;
+  supplier: string;
+  description: string;
+  cost: number;
+  createdAt: string;
+}
+
+export interface CostProjectTechnicianDay {
+  id: string;
+  projectId: string;
+  workDate: string;
+  technicianName: string;
+  serviceDescription: string;
+  dailyRate: number;
+  createdAt: string;
+}
+
+export interface CostProject {
+  id: string;
+  orderId: string;
+  order?: OrderService;
+  projectValue: number;
+  purchases: CostProjectPurchase[];
+  technicianDays: CostProjectTechnicianDay[];
+  createdAt: string;
+}
+

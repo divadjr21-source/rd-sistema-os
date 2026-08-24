@@ -18,6 +18,7 @@ import {
   Receipt,
   BarChart3,
   UserCog,
+  Wallet,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -31,12 +32,13 @@ const nav = [
   { href: "/painel/catalogo", label: "Catálogo", icon: Tags, adminOnly: false },
   { href: "/painel/clientes", label: "Clientes", icon: Users, adminOnly: false },
   { href: "/painel/relatorios", label: "Relatórios", icon: BarChart3, adminOnly: true },
+  { href: "/painel/custos", label: "Custos / Projetos", icon: Wallet, adminOnly: true },
   { href: "/painel/usuarios", label: "Usuários", icon: UserCog, adminOnly: true },
   { href: "/painel/empresa", label: "Empresa", icon: Building2, adminOnly: true },
 ];
 
 // Rotas que só o Admin pode acessar, mesmo digitando o link direto.
-const ADMIN_ONLY_PREFIXES = ["/painel/relatorios", "/painel/usuarios", "/painel/empresa"];
+const ADMIN_ONLY_PREFIXES = ["/painel/relatorios", "/painel/usuarios", "/painel/empresa", "/painel/custos"];
 
 export default function PanelLayout({
   children,
