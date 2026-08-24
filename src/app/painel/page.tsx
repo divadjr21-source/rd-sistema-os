@@ -17,6 +17,7 @@ import {
   AlertCircle,
   Calendar,
   Bell,
+  Receipt,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -242,7 +243,7 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {(appointmentsToday.length > 0 || appointmentsUpcoming.length > 0) && (
+      {(appointmentsToday.length > 0 || appointmentsUpcoming.length > 0 || vencendoHoje.length > 0 || vencendoProximos3.length > 0) && (
         <div className="bg-graphite-900 border border-graphite-800 rounded-2xl p-5 shadow-card">
           <div className="flex items-center gap-2 mb-4">
             <Calendar className="w-5 h-5 text-emerald-450" />
@@ -252,35 +253,63 @@ export default function DashboardPage() {
           <div className="grid md:grid-cols-2 gap-4">
             <div className="space-y-3">
               <h3 className="text-sm font-medium text-graphite-300">Hoje</h3>
-              {appointmentsToday.length === 0 ? (
+              {appointmentsToday.length === 0 && vencendoHoje.length === 0 ? (
                 <p className="text-sm text-graphite-500">Nenhum compromisso para hoje.</p>
               ) : (
-                appointmentsToday.map((a) => (
-                  <Link key={a.id} href={`/painel/agenda`}>
-                    <div className="bg-graphite-950 border border-graphite-800 rounded-xl p-3 hover:border-emerald-450/40 transition">
-                      <p className="font-medium text-sm">{a.title}</p>
-                      {a.client && <p className="text-xs text-graphite-400">{a.client.fullName}</p>}
-                      <p className="text-xs text-emerald-450 mt-1">{formatDateTime(a.scheduledAt)}</p>
-                    </div>
-                  </Link>
-                ))
+                <>
+                  {vencendoHoje.map((p) => (
+                    <Link key={`nf-hoje-${p.contract.id}`} href="/painel/contratos">
+                      <div className="bg-warning/10 border border-warning/30 rounded-xl p-3 hover:border-warning/60 transition flex items-start gap-2">
+                        <Receipt className="w-4 h-4 text-warning flex-shrink-0 mt-0.5" />
+                        <div>
+                          <p className="font-medium text-sm">Enviar NFSe — {p.contract.title}</p>
+                          <p className="text-xs text-graphite-400">{p.contract.client.fullName}</p>
+                          <p className="text-xs text-warning mt-1">Vence hoje</p>
+                        </div>
+                      </div>
+                    </Link>
+                  ))}
+                  {appointmentsToday.map((a) => (
+                    <Link key={a.id} href={`/painel/agenda`}>
+                      <div className="bg-graphite-950 border border-graphite-800 rounded-xl p-3 hover:border-emerald-450/40 transition">
+                        <p className="font-medium text-sm">{a.title}</p>
+                        {a.client && <p className="text-xs text-graphite-400">{a.client.fullName}</p>}
+                        <p className="text-xs text-emerald-450 mt-1">{formatDateTime(a.scheduledAt)}</p>
+                      </div>
+                    </Link>
+                  ))}
+                </>
               )}
             </div>
 
             <div className="space-y-3">
               <h3 className="text-sm font-medium text-graphite-300">Próximos 3 dias</h3>
-              {appointmentsUpcoming.length === 0 ? (
+              {appointmentsUpcoming.length === 0 && vencendoProximos3.length === 0 ? (
                 <p className="text-sm text-graphite-500">Nenhum compromisso nos próximos dias.</p>
               ) : (
-                appointmentsUpcoming.slice(0, 5).map((a) => (
-                  <Link key={a.id} href={`/painel/agenda`}>
-                    <div className="bg-graphite-950 border border-graphite-800 rounded-xl p-3 hover:border-emerald-450/40 transition">
-                      <p className="font-medium text-sm">{a.title}</p>
-                      {a.client && <p className="text-xs text-graphite-400">{a.client.fullName}</p>}
-                      <p className="text-xs text-emerald-450 mt-1">{formatDateTime(a.scheduledAt)}</p>
-                    </div>
-                  </Link>
-                ))
+                <>
+                  {vencendoProximos3.map((p) => (
+                    <Link key={`nf-prox-${p.contract.id}`} href="/painel/contratos">
+                      <div className="bg-warning/10 border border-warning/30 rounded-xl p-3 hover:border-warning/60 transition flex items-start gap-2">
+                        <Receipt className="w-4 h-4 text-warning flex-shrink-0 mt-0.5" />
+                        <div>
+                          <p className="font-medium text-sm">Enviar NFSe — {p.contract.title}</p>
+                          <p className="text-xs text-graphite-400">{p.contract.client.fullName}</p>
+                          <p className="text-xs text-warning mt-1">Vence dia {p.nfIssueDay}</p>
+                        </div>
+                      </div>
+                    </Link>
+                  ))}
+                  {appointmentsUpcoming.slice(0, 5).map((a) => (
+                    <Link key={a.id} href={`/painel/agenda`}>
+                      <div className="bg-graphite-950 border border-graphite-800 rounded-xl p-3 hover:border-emerald-450/40 transition">
+                        <p className="font-medium text-sm">{a.title}</p>
+                        {a.client && <p className="text-xs text-graphite-400">{a.client.fullName}</p>}
+                        <p className="text-xs text-emerald-450 mt-1">{formatDateTime(a.scheduledAt)}</p>
+                      </div>
+                    </Link>
+                  ))}
+                </>
               )}
             </div>
           </div>
