@@ -71,8 +71,8 @@ export default function ReciboPage() {
   }
 
   return (
-    <div className="min-h-screen bg-background py-6 px-4 print:bg-white print:text-black print:p-0">
-      <div className="max-w-3xl mx-auto space-y-6 print:space-y-4">
+    <div className="min-h-screen bg-background py-6 px-4 print:bg-white print:text-black print:p-0 print:text-[13px]">
+      <div className="max-w-3xl mx-auto space-y-6 print:space-y-0">
         <div className="flex gap-3 print:hidden">
           <Link href={`/painel/os/${id}`}>
             <Button variant="outline" className="gap-2">
@@ -84,22 +84,14 @@ export default function ReciboPage() {
           </Button>
         </div>
 
-        <div className="bg-graphite-900 border border-graphite-800 rounded-2xl p-8 shadow-card print:shadow-none print:border-black print:bg-white print:p-10 relative overflow-hidden">
-          {/* Carimbo PAGO / QUITADO */}
-          <div className="absolute top-8 right-8 print:top-10 print:right-10 pointer-events-none">
-            <div className="border-4 border-emerald-450 text-emerald-450 print:border-emerald-700 print:text-emerald-700 rounded-lg px-4 py-2 rotate-[-8deg] opacity-90">
-              <p className="text-xl font-black tracking-widest text-center leading-tight">PAGO</p>
-              <p className="text-xs font-bold tracking-widest text-center">QUITADO</p>
-            </div>
-          </div>
-
+        <div className="bg-graphite-900 border border-graphite-800 rounded-2xl p-8 shadow-card print:shadow-none print:border-none print:bg-white print:p-0">
           {/* Cabeçalho */}
-          <div className="flex items-center gap-4 mb-6">
-            <div className="h-16 w-16 rounded-xl bg-emerald-450 flex items-center justify-center print:bg-emerald-700 flex-shrink-0">
-              <ShieldCheck className="w-9 h-9 text-graphite-950 print:text-white" />
+          <div className="flex items-center gap-4 mb-6 print:mb-3">
+            <div className="h-16 w-16 print:h-12 print:w-12 rounded-xl bg-emerald-450 flex items-center justify-center print:bg-emerald-700 flex-shrink-0">
+              <ShieldCheck className="w-9 h-9 print:w-7 print:h-7 text-graphite-950 print:text-white" />
             </div>
             <div>
-              <h1 className="text-2xl font-bold print:text-3xl">{company?.name || "RD Solutions"}</h1>
+              <h1 className="text-2xl print:text-xl font-bold">{company?.name || "RD Solutions"}</h1>
               <p className="text-xs text-graphite-400 print:text-gray-600">CNPJ: {company?.cnpj}</p>
               <p className="text-xs text-graphite-400 print:text-gray-600">
                 {company?.address}
@@ -109,12 +101,12 @@ export default function ReciboPage() {
             </div>
           </div>
 
-          <div className="text-center border-y border-graphite-800 print:border-gray-300 py-3 mb-6">
-            <h2 className="text-lg font-bold uppercase tracking-wide">Recibo de Pagamento</h2>
+          <div className="text-center border-y border-graphite-800 print:border-gray-300 py-3 print:py-1.5 mb-6 print:mb-3">
+            <h2 className="text-lg print:text-base font-bold uppercase tracking-wide">Recibo de Pagamento</h2>
           </div>
 
           {/* Dados */}
-          <div className="grid sm:grid-cols-2 gap-4 text-sm mb-6">
+          <div className="grid sm:grid-cols-2 gap-4 print:gap-2 text-sm mb-6 print:mb-3">
             <Info icon={Hash} label="Recibo Nº" value={receiptNumber} />
             <Info icon={Hash} label="O.S. Nº" value={order.number} />
             <Info icon={User} label="Cliente" value={order.client.fullName} />
@@ -123,9 +115,9 @@ export default function ReciboPage() {
           </div>
 
           {/* Valor em destaque */}
-          <div className="bg-emerald-450/10 border border-emerald-450/30 rounded-xl p-5 text-center mb-6 print:bg-gray-100 print:border-gray-300">
+          <div className="bg-emerald-450/10 border border-emerald-450/30 rounded-xl p-5 print:p-3 text-center mb-6 print:mb-3 print:bg-gray-100 print:border-gray-300">
             <p className="text-xs text-graphite-400 print:text-gray-600 uppercase tracking-wide">Valor Recebido</p>
-            <p className="text-3xl font-bold text-emerald-450 print:text-emerald-700">{formatCurrency(total)}</p>
+            <p className="text-3xl print:text-2xl font-bold text-emerald-450 print:text-emerald-700">{formatCurrency(total)}</p>
             <p className="text-sm text-graphite-400 print:text-gray-700 mt-1 italic">
               ({valorPorExtenso(total)})
             </p>
@@ -133,24 +125,24 @@ export default function ReciboPage() {
 
           {/* Itens */}
           {order.budgetItems && order.budgetItems.length > 0 && (
-            <div className="mb-6">
-              <h3 className="text-sm font-semibold mb-2 text-graphite-300 print:text-black">
+            <div className="mb-6 print:mb-3">
+              <h3 className="text-sm font-semibold mb-2 print:mb-1 text-graphite-300 print:text-black">
                 Discriminação dos Itens / Serviços
               </h3>
-              <table className="w-full text-sm">
+              <table className="w-full text-sm print:text-xs">
                 <thead>
                   <tr className="text-left text-graphite-500 print:text-gray-600 border-b border-graphite-800 print:border-gray-300">
-                    <th className="py-1.5 pr-2 font-medium">Item</th>
-                    <th className="py-1.5 pr-2 font-medium text-center">Qtd.</th>
-                    <th className="py-1.5 pr-2 font-medium text-right">Valor</th>
+                    <th className="py-1.5 print:py-1 pr-2 font-medium">Item</th>
+                    <th className="py-1.5 print:py-1 pr-2 font-medium text-center">Qtd.</th>
+                    <th className="py-1.5 print:py-1 pr-2 font-medium text-right">Valor</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-graphite-800 print:divide-gray-300">
                   {order.budgetItems.map((item) => (
                     <tr key={item.id}>
-                      <td className="py-1.5 pr-2">{item.name}</td>
-                      <td className="py-1.5 pr-2 text-center">{item.quantity}</td>
-                      <td className="py-1.5 pr-2 text-right">{formatCurrency(item.total)}</td>
+                      <td className="py-1.5 print:py-1 pr-2">{item.name}</td>
+                      <td className="py-1.5 print:py-1 pr-2 text-center">{item.quantity}</td>
+                      <td className="py-1.5 print:py-1 pr-2 text-right">{formatCurrency(item.total)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -159,7 +151,7 @@ export default function ReciboPage() {
           )}
 
           {/* Declaração de quitação */}
-          <div className="flex items-start gap-2 bg-graphite-950 print:bg-transparent border border-graphite-800 print:border-gray-300 rounded-xl p-4 mb-8 text-sm">
+          <div className="flex items-start gap-2 bg-graphite-950 print:bg-transparent border border-graphite-800 print:border-gray-300 rounded-xl p-4 print:p-2.5 mb-8 print:mb-4 text-sm print:text-xs">
             <CheckCircle2 className="w-4 h-4 text-emerald-450 print:text-emerald-700 flex-shrink-0 mt-0.5" />
             <p className="text-graphite-300 print:text-gray-800">
               Declaro, para os devidos fins, ter recebido de <strong>{order.client.fullName}</strong> a quantia de{" "}
@@ -170,15 +162,15 @@ export default function ReciboPage() {
           </div>
 
           {/* Assinaturas */}
-          <div className="grid sm:grid-cols-2 gap-8 print:break-inside-avoid">
+          <div className="grid sm:grid-cols-2 gap-8 print:gap-6 print:break-inside-avoid">
             <div className="text-center">
-              <div className="border-t border-graphite-700 print:border-black pt-3">
+              <div className="border-t border-graphite-700 print:border-black pt-3 print:pt-2">
                 <p className="font-semibold">{company?.name || "RD Solutions"}</p>
                 <p className="text-xs text-graphite-500 print:text-gray-600">CNPJ: {company?.cnpj}</p>
               </div>
             </div>
             <div className="text-center">
-              <div className="border-t border-graphite-700 print:border-black pt-3">
+              <div className="border-t border-graphite-700 print:border-black pt-3 print:pt-2">
                 <p className="font-semibold">{order.client.fullName}</p>
                 <p className="text-xs text-graphite-500 print:text-gray-600">Cliente Contratante</p>
               </div>
