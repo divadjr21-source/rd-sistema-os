@@ -38,6 +38,7 @@ import {
 import { OrderService, OrderStatus, OrderPriority, PaymentStatus, CatalogItem } from "@/types";
 import { formatCurrency, formatPhone, statusLabels, priorityLabels, priorityColors, paymentStatusLabels, paymentStatusColors } from "@/lib/utils";
 import { cn } from "@/lib/utils";
+import Link from "next/link";
 import {
   ArrowLeft,
   Phone,
@@ -54,6 +55,7 @@ import {
   Video,
   Clock,
   MessageSquare,
+  Receipt,
 } from "lucide-react";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
@@ -475,6 +477,11 @@ export default function OrderDetailPage() {
           <Button variant="outline" onClick={generatePDF} className="gap-2">
             <FileDown className="w-4 h-4" /> PDF
           </Button>
+          <Link href={`/painel/os/${id}/recibo`}>
+            <Button variant="outline" className="gap-2">
+              <Receipt className="w-4 h-4" /> 🧾 PDF Recibo
+            </Button>
+          </Link>
         </div>
       </div>
 

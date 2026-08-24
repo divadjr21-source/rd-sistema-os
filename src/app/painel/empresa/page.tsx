@@ -14,6 +14,7 @@ export default function EmpresaPage() {
     whatsapp: "",
     address: "",
     city: "",
+    cnpj: "",
   });
   const [saved, setSaved] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -111,6 +112,19 @@ export default function EmpresaPage() {
             placeholder="Salvador - BA"
             required
           />
+        </div>
+
+        <div className="space-y-1.5">
+          <Label htmlFor="cnpj">CNPJ</Label>
+          <Input
+            id="cnpj"
+            name="cnpj"
+            value={form.cnpj}
+            onChange={handleChange}
+            placeholder="00.000.000/0001-00"
+            required
+          />
+          <p className="text-xs text-graphite-500">Usado no Recibo de Pagamento e na proposta de orçamento.</p>
         </div>
 
         <Button type="submit" className="w-full gap-2">

@@ -90,7 +90,7 @@ export default function PanelLayout({
 
   return (
     <div className="min-h-screen flex">
-      <aside className="hidden lg:flex w-64 flex-col bg-graphite-900 border-r border-graphite-800">
+      <aside className="hidden lg:flex w-64 flex-col bg-graphite-900 border-r border-graphite-800 print:hidden">
         <div className="h-16 flex items-center px-6 border-b border-graphite-800">
           <div className="h-9 w-9 rounded-lg bg-emerald-450 flex items-center justify-center mr-3">
             <span className="font-bold text-graphite-950 text-lg">RD</span>
@@ -133,7 +133,7 @@ export default function PanelLayout({
       </aside>
 
       <div className="flex-1 flex flex-col min-w-0">
-        <header className="lg:hidden h-16 bg-graphite-900 border-b border-graphite-800 flex items-center justify-between px-4 sticky top-0 z-20">
+        <header className="lg:hidden h-16 bg-graphite-900 border-b border-graphite-800 flex items-center justify-between px-4 sticky top-0 z-20 print:hidden">
           <div className="flex items-center gap-3">
             <div className="h-8 w-8 rounded-lg bg-emerald-450 flex items-center justify-center">
               <span className="font-bold text-graphite-950">RD</span>
@@ -177,7 +177,7 @@ export default function PanelLayout({
           </div>
         )}
 
-        <main className="flex-1 p-4 lg:p-8 overflow-auto">{children}</main>
+        <main className="flex-1 p-4 lg:p-8 overflow-auto print:p-0 print:overflow-visible">{children}</main>
       </div>
     </div>
   );

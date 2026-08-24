@@ -155,3 +155,66 @@ export function whatsappLink(phone: string, text: string) {
   const fullNumber = cleaned.startsWith("55") ? cleaned : `55${cleaned}`;
   return `https://wa.me/${fullNumber}?text=${encodeURIComponent(text)}`;
 }
+
+// --- Valor por extenso (usado no Recibo de Pagamento) ---
+
+const UNIDADES = ["", "um", "dois", "três", "quatro", "cinco", "seis", "sete", "oito", "nove"];
+const DEZ_A_DEZENOVE = [
+  "dez", "onze", "doze", "treze", "quatorze", "quinze", "dezesseis", "dezessete", "dezoito", "dezenove",
+];
+const DEZENAS = ["", "", "vinte", "trinta", "quarenta", "cinquenta", "sessenta", "setenta", "oitenta", "noventa"];
+const CENTENAS = [
+  "", "cento", "duzentos", "trezentos", "quatrocentos", "quinhentos", "seiscentos", "setecentos", "oitocentos", "novecentos",
+];
+
+function tripletToWords(n: number): string {
+  if (n === 0) return "";
+  if (n === 100) return "cem";
+  const c = Math.floor(n / 100);
+  const rest = n % 100;
+  const parts: string[] = [];
+  if (c > 0) parts.push(CENTENAS[c]);
+  if (rest > 0) {
+    if (rest < 10) parts.push(UNIDADES[rest]);
+    else if (rest < 20) parts.push(DEZ_A_DEZENOVE[rest - 10]);
+    else {
+      const d = Math.floor(rest / 10);
+      const u = rest % 10;
+      parts.push(u > 0 ? `${DEZENAS[d]} e ${UNIDADES[u]}` : DEZENAS[d]);
+    }
+  }
+  return parts.join(" e ");
+}
+
+function integerToWords(n: number): string {
+  if (n === 0) return "zero";
+  const milhoes = Math.floor(n / 1_000_000);
+  const milhares = Math.floor((n % 1_000_000) / 1000);
+  const centenas = n % 1000;
+  const parts: string[] = [];
+
+  if (milhoes > 0) parts.push(`${milhoes === 1 ? "um milhão" : `${tripletToWords(milhoes)} milhões`}`);
+  if (milhares > 0) parts.push(`${milhares === 1 ? "mil" : `${tripletToWords(milhares)} mil`}`);
+  if (centenas > 0) parts.push(tripletToWords(centenas));
+
+  return parts.join(" e ");
+}
+
+/** Converte um valor em reais (ex: 1234.5) para texto por extenso em português. */
+export function valorPorExtenso(value: number): string {
+  const safe = Math.max(0, Math.round(value * 100) / 100);
+  const reais = Math.floor(safe);
+  const centavos = Math.round((safe - reais) * 100);
+
+  const reaisWords = integerToWords(reais);
+  const reaisLabel = reais === 1 ? "real" : "reais";
+  let result = `${reaisWords} ${reaisLabel}`;
+
+  if (centavos > 0) {
+    const centavosWords = integerToWords(centavos);
+    const centavosLabel = centavos === 1 ? "centavo" : "centavos";
+    result += ` e ${centavosWords} ${centavosLabel}`;
+  }
+
+  return result.charAt(0).toUpperCase() + result.slice(1);
+}

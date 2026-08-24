@@ -76,6 +76,7 @@ type DbCompanySettings = {
   address: string;
   city: string;
   logo: string | null;
+  cnpj: string | null;
 };
 
 type DbContract = {
@@ -184,6 +185,7 @@ function mapCompany(row: DbCompanySettings): CompanySettings {
     address: row.address,
     city: row.city,
     logo: row.logo || undefined,
+    cnpj: row.cnpj || "47.958.906/0001-87",
   };
 }
 
@@ -763,7 +765,9 @@ async function ensureOrderStatus(orderId: string, status: OrderStatus) {
 export async function getCompany(): Promise<CompanySettings> {
   const { data, error } = await supabase.from("company_settings").select("*").eq("id", 1).maybeSingle();
   if (error) throw error;
-  return mapCompany(data || { id: 1, name: "RD Solutions", whatsapp: "", address: "", city: "", logo: null });
+  return mapCompany(
+    data || { id: 1, name: "RD Solutions", whatsapp: "", address: "", city: "", logo: null, cnpj: "47.958.906/0001-87" }
+  );
 }
 
 export async function updateCompany(data: Partial<CompanySettings>): Promise<CompanySettings> {
@@ -775,6 +779,7 @@ export async function updateCompany(data: Partial<CompanySettings>): Promise<Com
       address: data.address,
       city: data.city,
       logo: data.logo,
+      cnpj: data.cnpj,
     })
     .eq("id", 1)
     .select()

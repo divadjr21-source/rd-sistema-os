@@ -71,6 +71,7 @@ export interface CompanySettings {
   address: string;
   city: string;
   logo?: string;
+  cnpj: string;
 }
 
 export interface Contract {
