@@ -116,7 +116,7 @@ export default function DashboardPage() {
   const vencendoProximos3 = pendingInvoices.filter((p) => {
     if (p.invoice?.sentAt) return false;
     const diasRestantes = p.nfIssueDay - currentDay;
-    return diasRestantes > 0 && diasRestantes <= 3;
+    return diasRestantes > 0 && diasRestantes <= 7;
   });
   const vencidas = pendingInvoices.filter((p) => {
     if (p.invoice?.sentAt) return false;
@@ -253,10 +253,22 @@ export default function DashboardPage() {
           <div className="grid md:grid-cols-2 gap-4">
             <div className="space-y-3">
               <h3 className="text-sm font-medium text-graphite-300">Hoje</h3>
-              {appointmentsToday.length === 0 && vencendoHoje.length === 0 ? (
+              {appointmentsToday.length === 0 && vencendoHoje.length === 0 && vencidas.length === 0 ? (
                 <p className="text-sm text-graphite-500">Nenhum compromisso para hoje.</p>
               ) : (
                 <>
+                  {vencidas.map((p) => (
+                    <Link key={`nf-atrasada-${p.contract.id}`} href="/painel/contratos">
+                      <div className="bg-danger/10 border border-danger/30 rounded-xl p-3 hover:border-danger/60 transition flex items-start gap-2">
+                        <Receipt className="w-4 h-4 text-danger flex-shrink-0 mt-0.5" />
+                        <div>
+                          <p className="font-medium text-sm">Enviar NFSe — {p.contract.title}</p>
+                          <p className="text-xs text-graphite-400">{p.contract.client.fullName}</p>
+                          <p className="text-xs text-danger mt-1">Atrasada (venceu dia {p.nfIssueDay})</p>
+                        </div>
+                      </div>
+                    </Link>
+                  ))}
                   {vencendoHoje.map((p) => (
                     <Link key={`nf-hoje-${p.contract.id}`} href="/painel/contratos">
                       <div className="bg-warning/10 border border-warning/30 rounded-xl p-3 hover:border-warning/60 transition flex items-start gap-2">
