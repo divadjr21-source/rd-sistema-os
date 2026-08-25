@@ -33,11 +33,16 @@ export default function HomePage() {
             <span className="text-emerald-450">RD Solutions</span>
           </h1>
 
-          <p className="text-lg text-graphite-400">
-            Conte com nossa equipe especializada para manter seu ambiente seguro e funcionando sempre.
+          <p className="text-lg font-medium text-graphite-200">
+            Segurança e tecnologia para o seu condomínio.
           </p>
 
-          <p className="text-sm text-graphite-300">Abra seu chamado de forma rápida e prática.</p>
+          <p className="text-lg text-graphite-400">
+            Conte com a RD Solutions para manter seus sistemas de segurança, acesso e infraestrutura sempre
+            funcionando.
+          </p>
+
+          <p className="text-sm text-graphite-300">Solicite seu chamado de forma rápida e prática.</p>
 
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
             <Link href="/chamado" className="w-full sm:w-auto">
