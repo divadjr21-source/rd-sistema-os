@@ -4,7 +4,7 @@ import { useEffect, useState, useMemo } from "react";
 import Link from "next/link";
 import { getOrders, getPendingInvoices, markInvoiceAsSent, getAppointments } from "@/services/storage";
 import { OrderService, OrderStatus } from "@/types";
-import { formatCurrency, statusLabels, statusColors, priorityLabels, priorityColors, paymentStatusLabels, paymentStatusColors, toBrazilDateKey } from "@/lib/utils";
+import { formatCurrency, statusLabels, statusColors, priorityLabels, priorityColors, paymentStatusLabels, paymentStatusColors, toBrazilDateKey, whatsappLink } from "@/lib/utils";
 import {
   ClipboardList,
   DollarSign,
@@ -18,6 +18,7 @@ import {
   Calendar,
   Bell,
   Receipt,
+  MessageCircle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -122,6 +123,14 @@ export default function DashboardPage() {
     if (p.invoice?.sentAt) return false;
     return p.nfIssueDay < currentDay;
   });
+
+  // O.S. finalizadas mas ainda não pagas — lembrete pra cobrar o cliente.
+  const cobrancasPendentes = orders
+    .filter((o) => o.status === "finalizado" && o.paymentStatus === "aguardando")
+    .map((o) => {
+      const total = (o.budgetItems || []).reduce((acc, item) => acc + item.total, 0);
+      return { order: o, total };
+    });
 
   const appointmentsToday = appointments.filter((a) => {
     if (!a.scheduledAt) return false;
@@ -238,6 +247,51 @@ export default function DashboardPage() {
                 alertType="atrasada"
                 onMarkSent={() => handleMarkSent(p.contract.id, p.contract.monthlyValue)}
               />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {cobrancasPendentes.length > 0 && (
+        <div className="bg-graphite-900 border border-graphite-800 rounded-2xl p-5 shadow-card">
+          <div className="flex items-center gap-2 mb-4">
+            <DollarSign className="w-5 h-5 text-danger" />
+            <h2 className="text-lg font-semibold">Cobranças Pendentes</h2>
+            <span className="text-xs bg-danger/15 text-danger px-2 py-0.5 rounded-full font-medium">
+              {cobrancasPendentes.length}
+            </span>
+          </div>
+          <p className="text-xs text-graphite-500 mb-4">
+            O.S. finalizadas que ainda estão aguardando pagamento — entre em contato com o cliente.
+          </p>
+          <div className="space-y-2">
+            {cobrancasPendentes.map(({ order, total }) => (
+              <div
+                key={order.id}
+                className="flex flex-wrap items-center justify-between gap-3 bg-graphite-950 border border-graphite-800 rounded-xl p-3"
+              >
+                <Link href={`/painel/os/${order.id}`} className="min-w-0">
+                  <p className="font-medium text-sm hover:underline">
+                    #{order.number} — {order.client.fullName}
+                  </p>
+                  <p className="text-xs text-graphite-400 truncate">{order.description}</p>
+                </Link>
+                <div className="flex items-center gap-3 flex-shrink-0">
+                  <span className="text-sm font-semibold text-danger">{formatCurrency(total)}</span>
+                  <a
+                    href={whatsappLink(
+                      order.client.phone,
+                      `Olá ${order.client.fullName}! Passando para lembrar sobre o pagamento pendente da O.S. nº ${order.number} (${formatCurrency(total)}). Qualquer dúvida, estou à disposição!`
+                    )}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    <Button size="sm" variant="outline" className="gap-1.5">
+                      <MessageCircle className="w-3.5 h-3.5" /> Cobrar
+                    </Button>
+                  </a>
+                </div>
+              </div>
             ))}
           </div>
         </div>
