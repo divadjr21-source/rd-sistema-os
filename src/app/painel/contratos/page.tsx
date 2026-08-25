@@ -26,12 +26,14 @@ import {
   createContract,
   updateContract,
   deleteContract,
+  createAppointment,
 } from "@/services/storage";
 import { Contract, Client } from "@/types";
-import { formatCurrency, formatPhone } from "@/lib/utils";
-import { Search, Plus, Pencil, Trash2, FileText, User, Calendar, DollarSign, AlertTriangle } from "lucide-react";
+import { formatCurrency, formatPhone, buildBrazilTimestamp } from "@/lib/utils";
+import { Search, Plus, Pencil, Trash2, FileText, User, Calendar, DollarSign, AlertTriangle, CalendarPlus } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast, toastError } from "@/hooks/use-toast";
+import { extractErrorMessage } from "@/hooks/use-toast";
 
 export default function ContractsPage() {
   const router = useRouter();
@@ -43,6 +45,12 @@ export default function ContractsPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [contractToDelete, setContractToDelete] = useState<Contract | null>(null);
   const [submitting, setSubmitting] = useState(false);
+
+  const [scheduleTarget, setScheduleTarget] = useState<Contract | null>(null);
+  const [scheduleDate, setScheduleDate] = useState("");
+  const [scheduleTime, setScheduleTime] = useState("09:00");
+  const [scheduleTechnician, setScheduleTechnician] = useState("");
+  const [scheduling, setScheduling] = useState(false);
 
   const [form, setForm] = useState({
     clientId: "",
@@ -137,6 +145,53 @@ export default function ContractsPage() {
   const confirmDelete = (contract: Contract) => {
     setContractToDelete(contract);
     setDeleteModalOpen(true);
+  };
+
+  // Sugere a próxima data com o "Dia de Emissão da NF" do contrato: se o
+  // dia já passou neste mês, sugere o mesmo dia no mês seguinte.
+  const nextOccurrenceDate = (day: number) => {
+    const now = new Date();
+    let year = now.getFullYear();
+    let month = now.getMonth(); // 0-indexed
+    if (day < now.getDate()) {
+      month += 1;
+      if (month > 11) {
+        month = 0;
+        year += 1;
+      }
+    }
+    const lastDayOfMonth = new Date(year, month + 1, 0).getDate();
+    const safeDay = Math.min(day, lastDayOfMonth);
+    return `${year}-${String(month + 1).padStart(2, "0")}-${String(safeDay).padStart(2, "0")}`;
+  };
+
+  const openSchedule = (contract: Contract) => {
+    setScheduleTarget(contract);
+    setScheduleDate(nextOccurrenceDate(contract.nfIssueDay));
+    setScheduleTime("09:00");
+    setScheduleTechnician("");
+  };
+
+  const handleSchedule = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!scheduleTarget || scheduling) return;
+    setScheduling(true);
+    try {
+      await createAppointment({
+        clientId: scheduleTarget.clientId,
+        title: `${scheduleTarget.title} — ${scheduleTarget.client.fullName}`,
+        scheduledAt: buildBrazilTimestamp(scheduleDate, scheduleTime),
+        technician: scheduleTechnician,
+        notes: "Agendado a partir do Contrato Mensal.",
+      });
+      setScheduleTarget(null);
+      toast({ title: "Adicionado à Agenda com sucesso", variant: "success" });
+      router.refresh();
+    } catch (error) {
+      alert(extractErrorMessage(error));
+    } finally {
+      setScheduling(false);
+    }
   };
 
   const handleDelete = async () => {
@@ -307,6 +362,13 @@ export default function ContractsPage() {
                 </div>
                 <div className="flex gap-1">
                   <button
+                    onClick={() => openSchedule(contract)}
+                    className="p-2 text-graphite-400 hover:text-emerald-450"
+                    title="Adicionar à Agenda"
+                  >
+                    <CalendarPlus className="w-4 h-4" />
+                  </button>
+                  <button
                     onClick={() => openEdit(contract)}
                     className="p-2 text-graphite-400 hover:text-emerald-450"
                   >
@@ -354,6 +416,61 @@ export default function ContractsPage() {
             <Button type="button" variant="outline" onClick={() => setDeleteModalOpen(false)}>Cancelar</Button>
             <Button type="button" variant="destructive" onClick={handleDelete}>Excluir</Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Agendar contrato na Agenda */}
+      <Dialog open={!!scheduleTarget} onOpenChange={(open) => !open && setScheduleTarget(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <CalendarPlus className="w-5 h-5 text-emerald-450" /> Adicionar à Agenda
+            </DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-graphite-400">
+            {scheduleTarget?.title} — {scheduleTarget?.client.fullName}
+          </p>
+          <form onSubmit={handleSchedule} className="space-y-4">
+            <div className="space-y-1.5">
+              <Label htmlFor="scheduleDate">Data</Label>
+              <Input
+                id="scheduleDate"
+                type="date"
+                value={scheduleDate}
+                onChange={(e) => setScheduleDate(e.target.value)}
+                required
+              />
+              <p className="text-xs text-graphite-500">
+                Sugerida com base no dia de emissão da NF ({scheduleTarget?.nfIssueDay}) — pode ajustar se quiser.
+              </p>
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="scheduleTime">Horário</Label>
+              <Input
+                id="scheduleTime"
+                type="time"
+                value={scheduleTime}
+                onChange={(e) => setScheduleTime(e.target.value)}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="scheduleTechnician">Técnico (opcional)</Label>
+              <Input
+                id="scheduleTechnician"
+                value={scheduleTechnician}
+                onChange={(e) => setScheduleTechnician(e.target.value)}
+                placeholder="Nome do técnico responsável"
+              />
+            </div>
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setScheduleTarget(null)}>
+                Cancelar
+              </Button>
+              <Button type="submit" disabled={scheduling}>
+                {scheduling ? "Adicionando..." : "Adicionar à Agenda"}
+              </Button>
+            </DialogFooter>
+          </form>
         </DialogContent>
       </Dialog>
     </div>

@@ -243,7 +243,7 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {(appointmentsToday.length > 0 || appointmentsUpcoming.length > 0 || vencendoHoje.length > 0 || vencendoProximos3.length > 0) && (
+      {(appointmentsToday.length > 0 || appointmentsUpcoming.length > 0 || vencendoHoje.length > 0 || vencendoProximos3.length > 0 || vencidas.length > 0) && (
         <div className="bg-graphite-900 border border-graphite-800 rounded-2xl p-5 shadow-card">
           <div className="flex items-center gap-2 mb-4">
             <Calendar className="w-5 h-5 text-emerald-450" />
@@ -258,28 +258,50 @@ export default function DashboardPage() {
               ) : (
                 <>
                   {vencidas.map((p) => (
-                    <Link key={`nf-atrasada-${p.contract.id}`} href="/painel/contratos">
-                      <div className="bg-danger/10 border border-danger/30 rounded-xl p-3 hover:border-danger/60 transition flex items-start gap-2">
-                        <Receipt className="w-4 h-4 text-danger flex-shrink-0 mt-0.5" />
-                        <div>
-                          <p className="font-medium text-sm">Enviar NFSe — {p.contract.title}</p>
-                          <p className="text-xs text-graphite-400">{p.contract.client.fullName}</p>
-                          <p className="text-xs text-danger mt-1">Atrasada (venceu dia {p.nfIssueDay})</p>
+                    <div
+                      key={`nf-atrasada-${p.contract.id}`}
+                      className="bg-danger/10 border border-danger/30 rounded-xl p-3 flex items-start gap-2"
+                    >
+                      <Receipt className="w-4 h-4 text-danger flex-shrink-0 mt-0.5" />
+                      <div className="flex-1 min-w-0">
+                        <Link href="/painel/contratos">
+                          <p className="font-medium text-sm hover:underline">Enviar NFSe — {p.contract.title}</p>
+                        </Link>
+                        <p className="text-xs text-graphite-400">{p.contract.client.fullName}</p>
+                        <div className="flex items-center justify-between mt-1.5">
+                          <p className="text-xs text-danger">Atrasada (venceu dia {p.nfIssueDay})</p>
+                          <button
+                            onClick={() => handleMarkSent(p.contract.id, p.contract.monthlyValue)}
+                            className="text-xs font-medium text-emerald-450 hover:underline flex-shrink-0"
+                          >
+                            Marcar como enviada
+                          </button>
                         </div>
                       </div>
-                    </Link>
+                    </div>
                   ))}
                   {vencendoHoje.map((p) => (
-                    <Link key={`nf-hoje-${p.contract.id}`} href="/painel/contratos">
-                      <div className="bg-warning/10 border border-warning/30 rounded-xl p-3 hover:border-warning/60 transition flex items-start gap-2">
-                        <Receipt className="w-4 h-4 text-warning flex-shrink-0 mt-0.5" />
-                        <div>
-                          <p className="font-medium text-sm">Enviar NFSe — {p.contract.title}</p>
-                          <p className="text-xs text-graphite-400">{p.contract.client.fullName}</p>
-                          <p className="text-xs text-warning mt-1">Vence hoje</p>
+                    <div
+                      key={`nf-hoje-${p.contract.id}`}
+                      className="bg-warning/10 border border-warning/30 rounded-xl p-3 flex items-start gap-2"
+                    >
+                      <Receipt className="w-4 h-4 text-warning flex-shrink-0 mt-0.5" />
+                      <div className="flex-1 min-w-0">
+                        <Link href="/painel/contratos">
+                          <p className="font-medium text-sm hover:underline">Enviar NFSe — {p.contract.title}</p>
+                        </Link>
+                        <p className="text-xs text-graphite-400">{p.contract.client.fullName}</p>
+                        <div className="flex items-center justify-between mt-1.5">
+                          <p className="text-xs text-warning">Vence hoje</p>
+                          <button
+                            onClick={() => handleMarkSent(p.contract.id, p.contract.monthlyValue)}
+                            className="text-xs font-medium text-emerald-450 hover:underline flex-shrink-0"
+                          >
+                            Marcar como enviada
+                          </button>
                         </div>
                       </div>
-                    </Link>
+                    </div>
                   ))}
                   {appointmentsToday.map((a) => (
                     <Link key={a.id} href={`/painel/agenda`}>
@@ -301,16 +323,27 @@ export default function DashboardPage() {
               ) : (
                 <>
                   {vencendoProximos3.map((p) => (
-                    <Link key={`nf-prox-${p.contract.id}`} href="/painel/contratos">
-                      <div className="bg-warning/10 border border-warning/30 rounded-xl p-3 hover:border-warning/60 transition flex items-start gap-2">
-                        <Receipt className="w-4 h-4 text-warning flex-shrink-0 mt-0.5" />
-                        <div>
-                          <p className="font-medium text-sm">Enviar NFSe — {p.contract.title}</p>
-                          <p className="text-xs text-graphite-400">{p.contract.client.fullName}</p>
-                          <p className="text-xs text-warning mt-1">Vence dia {p.nfIssueDay}</p>
+                    <div
+                      key={`nf-prox-${p.contract.id}`}
+                      className="bg-warning/10 border border-warning/30 rounded-xl p-3 flex items-start gap-2"
+                    >
+                      <Receipt className="w-4 h-4 text-warning flex-shrink-0 mt-0.5" />
+                      <div className="flex-1 min-w-0">
+                        <Link href="/painel/contratos">
+                          <p className="font-medium text-sm hover:underline">Enviar NFSe — {p.contract.title}</p>
+                        </Link>
+                        <p className="text-xs text-graphite-400">{p.contract.client.fullName}</p>
+                        <div className="flex items-center justify-between mt-1.5">
+                          <p className="text-xs text-warning">Vence dia {p.nfIssueDay}</p>
+                          <button
+                            onClick={() => handleMarkSent(p.contract.id, p.contract.monthlyValue)}
+                            className="text-xs font-medium text-emerald-450 hover:underline flex-shrink-0"
+                          >
+                            Marcar como enviada
+                          </button>
                         </div>
                       </div>
-                    </Link>
+                    </div>
                   ))}
                   {appointmentsUpcoming.slice(0, 5).map((a) => (
                     <Link key={a.id} href={`/painel/agenda`}>
