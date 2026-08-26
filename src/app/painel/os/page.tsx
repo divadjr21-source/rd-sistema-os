@@ -8,12 +8,14 @@ import { OrderService, Client, OrderStatus, OrderPriority, PaymentStatus } from 
 import {
   formatPhone,
   formatPhoneInput,
+  formatCurrency,
   statusLabels,
   statusColors,
   priorityLabels,
   priorityColors,
   paymentStatusLabels,
   paymentStatusColors,
+  whatsappLink,
 } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -35,7 +37,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Search, Eye, Trash2, Plus, Upload, X, AlertTriangle, Pencil } from "lucide-react";
+import { Search, Eye, Trash2, Plus, Upload, X, AlertTriangle, Pencil, MessageCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { extractErrorMessage } from "@/hooks/use-toast";
 
@@ -50,6 +52,34 @@ const statusOptions: OrderStatus[] = [
 
 const priorityOptions: OrderPriority[] = ["baixa", "media", "alta"];
 const paymentStatusOptions: PaymentStatus[] = ["aguardando", "paga"];
+
+// Monta uma mensagem de WhatsApp adequada ao momento atual da O.S.
+function buildWhatsappMessage(order: OrderService): string {
+  const total = (order.budgetItems || []).reduce((acc, item) => acc + item.total, 0);
+  const greeting = `Olá ${order.client.fullName}! Aqui é da RD Solutions, sobre a O.S. nº ${order.number}.`;
+
+  switch (order.status) {
+    case "pendente":
+      return `${greeting} Recebemos sua solicitação (${order.description}) e em breve entraremos em contato para agendar o atendimento.`;
+    case "em_orcamento":
+      return `${greeting} Estamos preparando o orçamento do seu atendimento. Em breve enviaremos os valores para aprovação.`;
+    case "aprovado":
+      return `${greeting} Seu orçamento foi aprovado! Em breve entraremos em contato para agendar a execução do serviço.`;
+    case "recusado":
+      return `${greeting} Vimos que o orçamento não foi aprovado. Ficamos à disposição para ajustar valores ou tirar dúvidas.`;
+    case "em_execucao":
+      return `${greeting} Seu serviço está em execução. Qualquer dúvida durante o atendimento, estamos à disposição.`;
+    case "finalizado":
+      if (order.paymentStatus === "aguardando") {
+        return `${greeting} O serviço foi finalizado. Passando para lembrar sobre o pagamento pendente${
+          total > 0 ? ` no valor de ${formatCurrency(total)}` : ""
+        }. Qualquer dúvida, estou à disposição!`;
+      }
+      return `${greeting} O serviço foi finalizado com sucesso. Agradecemos a confiança!`;
+    default:
+      return greeting;
+  }
+}
 
 export default function OrdersListPage() {
   const router = useRouter();
@@ -481,6 +511,15 @@ export default function OrdersListPage() {
                           <Eye className="w-4 h-4" /> Ver
                         </button>
                       </Link>
+                      <a
+                        href={whatsappLink(order.client.phone, buildWhatsappMessage(order))}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1 text-emerald-450 hover:text-emerald-400 transition"
+                        title="Enviar mensagem no WhatsApp"
+                      >
+                        <MessageCircle className="w-4 h-4" />
+                      </a>
                       <button
                         onClick={() => openEdit(order)}
                         className="inline-flex items-center gap-1 text-graphite-400 hover:text-emerald-450 transition"
