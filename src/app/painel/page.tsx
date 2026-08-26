@@ -19,6 +19,8 @@ import {
   Bell,
   Receipt,
   MessageCircle,
+  Eye,
+  EyeOff,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -203,6 +205,7 @@ export default function DashboardPage() {
           label="Faturamento Estimado"
           value={formatCurrency(monthlyRevenue)}
           highlight
+          maskable
         />
         <Card icon={Clock} label="Em Andamento" value={orders.filter((o) => ["aprovado", "em_execucao"].includes(o.status)).length.toString()} />
         <Card icon={CheckCircle} label="Finalizados" value={orders.filter((o) => o.status === "finalizado").length.toString()} />
@@ -487,20 +490,46 @@ function Card({
   label,
   value,
   highlight,
+  maskable,
 }: {
   icon: React.ElementType;
   label: string;
   value: string;
   highlight?: boolean;
+  maskable?: boolean;
 }) {
+  const [hidden, setHidden] = useState(false);
+
+  useEffect(() => {
+    if (!maskable) return;
+    setHidden(localStorage.getItem("rd_hide_revenue") === "1");
+  }, [maskable]);
+
+  const toggleHidden = () => {
+    const next = !hidden;
+    setHidden(next);
+    localStorage.setItem("rd_hide_revenue", next ? "1" : "0");
+  };
+
   return (
     <div className="bg-graphite-900 border border-graphite-800 rounded-2xl p-5 shadow-card">
       <div className="flex items-start justify-between">
         <div className={cn("p-2.5 rounded-xl", highlight ? "bg-emerald-450/20 text-emerald-450" : "bg-graphite-800 text-graphite-300")}>
           <Icon className="w-5 h-5" />
         </div>
+        {maskable && (
+          <button
+            onClick={toggleHidden}
+            className="text-graphite-500 hover:text-graphite-300 p-1"
+            title={hidden ? "Mostrar valor" : "Ocultar valor"}
+          >
+            {hidden ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+          </button>
+        )}
       </div>
-      <p className={cn("text-2xl font-bold mt-3", highlight && "text-emerald-450")}>{value}</p>
+      <p className={cn("text-2xl font-bold mt-3", highlight && "text-emerald-450")}>
+        {maskable && hidden ? "R$ ••••••" : value}
+      </p>
       <p className="text-sm text-graphite-400">{label}</p>
     </div>
   );

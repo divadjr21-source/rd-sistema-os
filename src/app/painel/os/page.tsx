@@ -57,25 +57,28 @@ const paymentStatusOptions: PaymentStatus[] = ["aguardando", "paga"];
 function buildWhatsappMessage(order: OrderService): string {
   const total = (order.budgetItems || []).reduce((acc, item) => acc + item.total, 0);
   const greeting = `Olá ${order.client.fullName}! Aqui é da RD Solutions, sobre a O.S. nº ${order.number}.`;
+  const siteUrl =
+    process.env.NEXT_PUBLIC_SITE_URL || (typeof window !== "undefined" ? window.location.origin : "");
+  const trackingLine = `\n\nVocê pode acompanhar o andamento do seu chamado a qualquer momento em ${siteUrl}, na opção "Acompanhar Chamados", usando o número da O.S. (${order.number}).`;
 
   switch (order.status) {
     case "pendente":
-      return `${greeting} Recebemos sua solicitação (${order.description}) e em breve entraremos em contato para agendar o atendimento.`;
+      return `${greeting} Recebemos sua solicitação (${order.description}) e em breve entraremos em contato para agendar o atendimento.${trackingLine}`;
     case "em_orcamento":
-      return `${greeting} Estamos preparando o orçamento do seu atendimento. Em breve enviaremos os valores para aprovação.`;
+      return `${greeting} Estamos preparando o orçamento do seu atendimento. Em breve enviaremos os valores para aprovação.${trackingLine}`;
     case "aprovado":
-      return `${greeting} Seu orçamento foi aprovado! Em breve entraremos em contato para agendar a execução do serviço.`;
+      return `${greeting} Seu orçamento foi aprovado! Em breve entraremos em contato para agendar a execução do serviço.${trackingLine}`;
     case "recusado":
-      return `${greeting} Vimos que o orçamento não foi aprovado. Ficamos à disposição para ajustar valores ou tirar dúvidas.`;
+      return `${greeting} Vimos que o orçamento não foi aprovado. Ficamos à disposição para ajustar valores ou tirar dúvidas.${trackingLine}`;
     case "em_execucao":
-      return `${greeting} Seu serviço está em execução. Qualquer dúvida durante o atendimento, estamos à disposição.`;
+      return `${greeting} Seu serviço está em execução. Qualquer dúvida durante o atendimento, estamos à disposição.${trackingLine}`;
     case "finalizado":
       if (order.paymentStatus === "aguardando") {
         return `${greeting} O serviço foi finalizado. Passando para lembrar sobre o pagamento pendente${
           total > 0 ? ` no valor de ${formatCurrency(total)}` : ""
-        }. Qualquer dúvida, estou à disposição!`;
+        }. Qualquer dúvida, estou à disposição!${trackingLine}`;
       }
-      return `${greeting} O serviço foi finalizado com sucesso. Agradecemos a confiança!`;
+      return `${greeting} O serviço foi finalizado com sucesso. Agradecemos a confiança!${trackingLine}`;
     default:
       return greeting;
   }
