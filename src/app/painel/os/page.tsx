@@ -37,7 +37,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Search, Eye, Trash2, Plus, Upload, X, AlertTriangle, Pencil, MessageCircle } from "lucide-react";
+import { Search, Eye, Trash2, Plus, Upload, X, AlertTriangle, Pencil, Send } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { extractErrorMessage } from "@/hooks/use-toast";
 
@@ -515,10 +515,10 @@ export default function OrdersListPage() {
                         href={whatsappLink(order.client.phone, buildWhatsappMessage(order))}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1 text-emerald-450 hover:text-emerald-400 transition"
-                        title="Enviar mensagem no WhatsApp"
+                        className="inline-flex items-center gap-1 text-emerald-450 hover:underline"
+                        title="Enviar WhatsApp"
                       >
-                        <MessageCircle className="w-4 h-4" />
+                        <Send className="w-4 h-4" />
                       </a>
                       <button
                         onClick={() => openEdit(order)}
