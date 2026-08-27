@@ -424,7 +424,9 @@ export default function DashboardPage() {
         <div className="overflow-x-auto pb-2 scrollbar-thin">
           <div className="flex gap-4 min-w-[900px]">
             {columns.map((col) => {
-              const items = orders.filter((o) => o.status === col.status);
+              // As O.S. já pagas somem do quadro para não poluir o dia a
+              // dia — ficam disponíveis em Relatórios (card "O.S. Pagas").
+              const items = orders.filter((o) => o.status === col.status && o.paymentStatus !== "paga");
               return (
                 <div key={col.status} className="flex-1 min-w-[180px]">
                   <div className="flex items-center justify-between mb-3">

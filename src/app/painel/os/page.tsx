@@ -16,6 +16,7 @@ import {
   paymentStatusLabels,
   paymentStatusColors,
   whatsappLink,
+  buildBrazilTimestamp,
 } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -37,7 +38,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Search, Eye, Trash2, Plus, Upload, X, AlertTriangle, Pencil, Send } from "lucide-react";
+import { Search, Eye, Trash2, Plus, Upload, X, AlertTriangle, Pencil, Send, CalendarPlus } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { extractErrorMessage } from "@/hooks/use-toast";
 
@@ -106,6 +107,10 @@ export default function OrdersListPage() {
     priority: "media" as OrderPriority,
   });
   const [files, setFiles] = useState<{ file: File; preview: string; type: "image" | "video"; name: string }[]>([]);
+  const [scheduleOnCreate, setScheduleOnCreate] = useState(false);
+  const [createScheduleDate, setCreateScheduleDate] = useState("");
+  const [createScheduleTime, setCreateScheduleTime] = useState("09:00");
+  const [createScheduleTechnician, setCreateScheduleTechnician] = useState("");
 
   const [editModalOpen, setEditModalOpen] = useState(false);
   const [editingOrder, setEditingOrder] = useState<OrderService | null>(null);
@@ -115,6 +120,10 @@ export default function OrdersListPage() {
     priority: "media" as OrderPriority,
     paymentStatus: "aguardando" as PaymentStatus,
   });
+  const [scheduleOnEdit, setScheduleOnEdit] = useState(false);
+  const [editScheduleDate, setEditScheduleDate] = useState("");
+  const [editScheduleTime, setEditScheduleTime] = useState("09:00");
+  const [editScheduleTechnician, setEditScheduleTechnician] = useState("");
 
   useEffect(() => {
     refresh();
@@ -138,6 +147,10 @@ export default function OrdersListPage() {
       priority: "media",
     });
     setFiles([]);
+    setScheduleOnCreate(false);
+    setCreateScheduleDate("");
+    setCreateScheduleTime("09:00");
+    setCreateScheduleTechnician("");
   };
 
   const openEdit = (order: OrderService) => {
@@ -148,15 +161,23 @@ export default function OrdersListPage() {
       priority: order.priority,
       paymentStatus: order.paymentStatus,
     });
+    setScheduleOnEdit(false);
+    setEditScheduleDate("");
+    setEditScheduleTime("09:00");
+    setEditScheduleTechnician("");
     setEditModalOpen(true);
   };
 
   const handleEditSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingOrder || submitting) return;
+    if (scheduleOnEdit && !editScheduleDate) {
+      alert("Escolha a data do agendamento.");
+      return;
+    }
     setSubmitting(true);
     try {
-      const { updateOrderStatus, updateOrderPriority, updateOrderDescription, updateOrderPaymentStatus } =
+      const { updateOrderStatus, updateOrderPriority, updateOrderDescription, updateOrderPaymentStatus, createAppointment } =
         await import("@/services/storage");
       await Promise.all([
         updateOrderDescription(editingOrder.id, editForm.description),
@@ -164,6 +185,16 @@ export default function OrdersListPage() {
         updateOrderPriority(editingOrder.id, editForm.priority),
         updateOrderPaymentStatus(editingOrder.id, editForm.paymentStatus),
       ]);
+      if (scheduleOnEdit) {
+        await createAppointment({
+          orderId: editingOrder.id,
+          clientId: editingOrder.clientId,
+          title: `${editingOrder.description} — ${editingOrder.client.fullName}`,
+          scheduledAt: buildBrazilTimestamp(editScheduleDate, editScheduleTime),
+          technician: editScheduleTechnician,
+          notes: `Agendado a partir da O.S. #${editingOrder.number}.`,
+        });
+      }
       await refresh();
       setEditModalOpen(false);
       setEditingOrder(null);
@@ -201,6 +232,10 @@ export default function OrdersListPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (submitting) return;
+    if (scheduleOnCreate && !createScheduleDate) {
+      alert("Escolha a data do agendamento.");
+      return;
+    }
     let clientData: { fullName: string; phone: string; address: string };
     if (form.clientMode === "existing") {
       const selected = clients.find((c) => c.id === form.clientId);
@@ -239,9 +274,24 @@ export default function OrdersListPage() {
         if (error) throw error;
       }
 
+      if (scheduleOnCreate) {
+        const { createAppointment } = await import("@/services/storage");
+        await createAppointment({
+          orderId: order.id,
+          clientId: order.clientId,
+          title: `${form.description} — ${clientData.fullName}`,
+          scheduledAt: buildBrazilTimestamp(createScheduleDate, createScheduleTime),
+          technician: createScheduleTechnician,
+          notes: `Agendado a partir da O.S. #${order.number}.`,
+        });
+      }
+
       await refresh();
       setModalOpen(false);
       resetForm();
+      router.refresh();
+    } catch (error) {
+      alert(extractErrorMessage(error));
     } finally {
       setSubmitting(false);
     }
@@ -432,6 +482,50 @@ export default function OrdersListPage() {
                         </button>
                       </div>
                     ))}
+                  </div>
+                )}
+              </div>
+
+              <div className="border border-graphite-800 rounded-xl p-3 space-y-3">
+                <label className="flex items-center gap-2 text-sm font-medium cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={scheduleOnCreate}
+                    onChange={(e) => setScheduleOnCreate(e.target.checked)}
+                    className="rounded border-graphite-700"
+                  />
+                  <CalendarPlus className="w-4 h-4 text-emerald-450" /> Também agendar na Agenda
+                </label>
+                {scheduleOnCreate && (
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1.5 col-span-2 sm:col-span-1">
+                      <Label htmlFor="createScheduleDate">Data</Label>
+                      <Input
+                        id="createScheduleDate"
+                        type="date"
+                        value={createScheduleDate}
+                        onChange={(e) => setCreateScheduleDate(e.target.value)}
+                        required={scheduleOnCreate}
+                      />
+                    </div>
+                    <div className="space-y-1.5 col-span-2 sm:col-span-1">
+                      <Label htmlFor="createScheduleTime">Horário</Label>
+                      <Input
+                        id="createScheduleTime"
+                        type="time"
+                        value={createScheduleTime}
+                        onChange={(e) => setCreateScheduleTime(e.target.value)}
+                      />
+                    </div>
+                    <div className="space-y-1.5 col-span-2">
+                      <Label htmlFor="createScheduleTechnician">Técnico (opcional)</Label>
+                      <Input
+                        id="createScheduleTechnician"
+                        value={createScheduleTechnician}
+                        onChange={(e) => setCreateScheduleTechnician(e.target.value)}
+                        placeholder="Nome do técnico responsável"
+                      />
+                    </div>
                   </div>
                 )}
               </div>
@@ -637,6 +731,50 @@ export default function OrdersListPage() {
                   ))}
                 </SelectContent>
               </Select>
+            </div>
+
+            <div className="border border-graphite-800 rounded-xl p-3 space-y-3">
+              <label className="flex items-center gap-2 text-sm font-medium cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={scheduleOnEdit}
+                  onChange={(e) => setScheduleOnEdit(e.target.checked)}
+                  className="rounded border-graphite-700"
+                />
+                <CalendarPlus className="w-4 h-4 text-emerald-450" /> Também agendar na Agenda
+              </label>
+              {scheduleOnEdit && (
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1.5 col-span-2 sm:col-span-1">
+                    <Label htmlFor="editScheduleDate">Data</Label>
+                    <Input
+                      id="editScheduleDate"
+                      type="date"
+                      value={editScheduleDate}
+                      onChange={(e) => setEditScheduleDate(e.target.value)}
+                      required={scheduleOnEdit}
+                    />
+                  </div>
+                  <div className="space-y-1.5 col-span-2 sm:col-span-1">
+                    <Label htmlFor="editScheduleTime">Horário</Label>
+                    <Input
+                      id="editScheduleTime"
+                      type="time"
+                      value={editScheduleTime}
+                      onChange={(e) => setEditScheduleTime(e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-1.5 col-span-2">
+                    <Label htmlFor="editScheduleTechnician">Técnico (opcional)</Label>
+                    <Input
+                      id="editScheduleTechnician"
+                      value={editScheduleTechnician}
+                      onChange={(e) => setEditScheduleTechnician(e.target.value)}
+                      placeholder="Nome do técnico responsável"
+                    />
+                  </div>
+                </div>
+              )}
             </div>
 
             <DialogFooter>

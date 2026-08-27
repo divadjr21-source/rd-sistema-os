@@ -7,7 +7,7 @@ import { getOrdersByMonth, getActiveContracts, getCompany } from "@/services/sto
 import { OrderService, Contract } from "@/types";
 import { formatCurrency, statusLabels } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import { ChevronLeft, ChevronRight, ClipboardList, CheckCircle, XCircle, TrendingUp, Receipt, Download, Printer } from "lucide-react";
+import { ChevronLeft, ChevronRight, ClipboardList, CheckCircle, XCircle, TrendingUp, Receipt, Download, Printer, Wallet, X } from "lucide-react";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import { toast, toastError } from "@/hooks/use-toast";
@@ -130,6 +130,10 @@ export default function RelatoriosPage() {
     [orders]
   );
   const cancelados = useMemo(() => orders.filter((o) => o.status === "recusado"), [orders]);
+  const pagas = useMemo(() => orders.filter((o) => o.paymentStatus === "paga"), [orders]);
+
+  const [showOnlyPaid, setShowOnlyPaid] = useState(false);
+  const displayedOrders = showOnlyPaid ? pagas : orders;
 
   const faturamentoOS = useMemo(
     () =>
@@ -200,7 +204,7 @@ export default function RelatoriosPage() {
             </Button>
           </div>
 
-          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="grid sm:grid-cols-2 lg:grid-cols-5 gap-4">
             <Card
               icon={ClipboardList}
               label="Total de O.S."
@@ -224,6 +228,14 @@ export default function RelatoriosPage() {
               label="O.S. Canceladas/Recusadas"
               value={cancelados.length.toString()}
               color="text-danger"
+            />
+            <Card
+              icon={Wallet}
+              label="O.S. Pagas"
+              value={pagas.length.toString()}
+              color="text-emerald-450"
+              onClick={() => setShowOnlyPaid((v) => !v)}
+              active={showOnlyPaid}
             />
           </div>
 
@@ -261,9 +273,21 @@ export default function RelatoriosPage() {
           </div>
 
           <div className="bg-graphite-900 border border-graphite-800 rounded-2xl p-6 shadow-card">
-            <h2 className="text-lg font-semibold mb-4">Detalhamento das O.S.</h2>
-            {orders.length === 0 ? (
-              <p className="text-graphite-500 text-center py-8">Nenhuma O.S. encontrada no período.</p>
+            <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
+              <h2 className="text-lg font-semibold">Detalhamento das O.S.</h2>
+              {showOnlyPaid && (
+                <button
+                  onClick={() => setShowOnlyPaid(false)}
+                  className="text-xs bg-emerald-450/15 text-emerald-450 px-3 py-1.5 rounded-full font-medium flex items-center gap-1.5 print:hidden"
+                >
+                  Mostrando só O.S. Pagas <X className="w-3 h-3" />
+                </button>
+              )}
+            </div>
+            {displayedOrders.length === 0 ? (
+              <p className="text-graphite-500 text-center py-8">
+                {showOnlyPaid ? "Nenhuma O.S. paga neste período." : "Nenhuma O.S. encontrada no período."}
+              </p>
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
@@ -277,7 +301,7 @@ export default function RelatoriosPage() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-graphite-800">
-                    {orders.map((order) => {
+                    {displayedOrders.map((order) => {
                       const total = (order.budgetItems || []).reduce((acc, item) => acc + item.total, 0);
                       return (
                         <tr key={order.id}>
@@ -307,14 +331,24 @@ function Card({
   label,
   value,
   color,
+  onClick,
+  active,
 }: {
   icon: React.ElementType;
   label: string;
   value: string;
   color: string;
+  onClick?: () => void;
+  active?: boolean;
 }) {
+  const Wrapper = onClick ? "button" : "div";
   return (
-    <div className="bg-graphite-900 border border-graphite-800 rounded-2xl p-5 shadow-card flex items-center gap-4">
+    <Wrapper
+      onClick={onClick}
+      className={`bg-graphite-900 border rounded-2xl p-5 shadow-card flex items-center gap-4 w-full text-left transition ${
+        active ? "border-emerald-450" : "border-graphite-800"
+      } ${onClick ? "hover:border-emerald-450/60 cursor-pointer" : ""}`}
+    >
       <div className={`p-3 rounded-xl bg-graphite-950 ${color}`}>
         <Icon className="w-6 h-6" />
       </div>
@@ -322,6 +356,6 @@ function Card({
         <p className="text-sm text-graphite-400">{label}</p>
         <p className="text-2xl font-bold">{value}</p>
       </div>
-    </div>
+    </Wrapper>
   );
 }
