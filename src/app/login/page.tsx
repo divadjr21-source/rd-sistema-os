@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { login } from "@/services/storage";
+import { login, getMyProfile } from "@/services/storage";
 import { Shield } from "lucide-react";
 
 export default function LoginPage() {
@@ -22,7 +22,10 @@ export default function LoginPage() {
     try {
       const ok = await login(email, password);
       if (ok) {
-        router.replace("/painel");
+        // Técnico não tem acesso ao Dashboard, então já entra direto na
+        // tela de Ordens de Serviço em vez de cair numa tela bloqueada.
+        const profile = await getMyProfile();
+        router.replace(profile?.role === "admin" ? "/painel" : "/painel/os");
       } else {
         setError(true);
       }

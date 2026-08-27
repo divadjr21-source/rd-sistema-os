@@ -24,21 +24,39 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 const nav = [
-  { href: "/painel", label: "Dashboard", icon: LayoutDashboard, adminOnly: false },
+  { href: "/painel", label: "Dashboard", icon: LayoutDashboard, adminOnly: true },
   { href: "/painel/os", label: "Ordens de Serviço", icon: ClipboardList, adminOnly: false },
   { href: "/painel/orcamentos", label: "Orçamentos", icon: FileText, adminOnly: false },
   { href: "/painel/agenda", label: "Agenda", icon: CalendarDays, adminOnly: false },
-  { href: "/painel/contratos", label: "Contratos", icon: Receipt, adminOnly: false },
-  { href: "/painel/catalogo", label: "Catálogo", icon: Tags, adminOnly: false },
-  { href: "/painel/clientes", label: "Clientes", icon: Users, adminOnly: false },
+  { href: "/painel/contratos", label: "Contratos", icon: Receipt, adminOnly: true },
+  { href: "/painel/catalogo", label: "Catálogo", icon: Tags, adminOnly: true },
+  { href: "/painel/clientes", label: "Clientes", icon: Users, adminOnly: true },
   { href: "/painel/relatorios", label: "Relatórios", icon: BarChart3, adminOnly: true },
   { href: "/painel/custos", label: "Custos / Projetos", icon: Wallet, adminOnly: true },
   { href: "/painel/usuarios", label: "Usuários", icon: UserCog, adminOnly: true },
   { href: "/painel/empresa", label: "Empresa", icon: Building2, adminOnly: true },
 ];
 
-// Rotas que só o Admin pode acessar, mesmo digitando o link direto.
-const ADMIN_ONLY_PREFIXES = ["/painel/relatorios", "/painel/usuarios", "/painel/empresa", "/painel/custos"];
+// Rota do Dashboard: bloqueada por igualdade exata (não pode usar "startsWith"
+// aqui, senão bloquearia TODAS as rotas do painel, já que todas começam com
+// "/painel").
+const ADMIN_ONLY_EXACT = ["/painel"];
+
+// Demais rotas que só o Admin pode acessar, mesmo digitando o link direto.
+// O perfil Técnico fica restrito a: Ordens de Serviço, Orçamentos e Agenda.
+const ADMIN_ONLY_PREFIXES = [
+  "/painel/relatorios",
+  "/painel/usuarios",
+  "/painel/empresa",
+  "/painel/custos",
+  "/painel/contratos",
+  "/painel/catalogo",
+  "/painel/clientes",
+];
+
+// Para onde o Técnico é levado quando tenta acessar algo bloqueado (o
+// Dashboard também é restrito a ele, então não pode ser o destino padrão).
+const TECHNICIAN_HOME = "/painel/os";
 
 export default function PanelLayout({
   children,
@@ -65,8 +83,10 @@ export default function PanelLayout({
       }
       setProfile(p);
       // Bloqueia acesso direto a rotas de admin digitando a URL.
-      if (p && p.role !== "admin" && ADMIN_ONLY_PREFIXES.some((prefix) => pathname.startsWith(prefix))) {
-        router.replace("/painel");
+      const isBlocked =
+        ADMIN_ONLY_EXACT.includes(pathname) || ADMIN_ONLY_PREFIXES.some((prefix) => pathname.startsWith(prefix));
+      if (p && p.role !== "admin" && isBlocked) {
+        router.replace(TECHNICIAN_HOME);
         return;
       }
       setLoading(false);
