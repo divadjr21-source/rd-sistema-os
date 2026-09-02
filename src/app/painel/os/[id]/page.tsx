@@ -519,20 +519,22 @@ export default function OrderDetailPage() {
                 >
                   {priorityLabels[order.priority]}
                 </span>
-                <span
-                  className={cn(
-                    "text-xs px-2 py-1 rounded-full border font-medium whitespace-nowrap",
-                    paymentStatusColors[order.paymentStatus]
-                  )}
-                >
-                  {paymentStatusLabels[order.paymentStatus]}
-                </span>
+                {isAdmin && (
+                  <span
+                    className={cn(
+                      "text-xs px-2 py-1 rounded-full border font-medium whitespace-nowrap",
+                      paymentStatusColors[order.paymentStatus]
+                    )}
+                  >
+                    {paymentStatusLabels[order.paymentStatus]}
+                  </span>
+                )}
               </div>
             </div>
 
             <div className="grid sm:grid-cols-2 gap-4">
               <Info icon={FileText} label="Cliente" value={order.client.fullName} />
-              <Info icon={Phone} label="Telefone" value={formatPhone(order.client.phone)} />
+              {isAdmin && <Info icon={Phone} label="Telefone" value={formatPhone(order.client.phone)} />}
               <Info icon={MapPin} label="Endereço" value={order.client.address} />
               <Info icon={Calendar} label="Abertura" value={new Date(order.createdAt).toLocaleString("pt-BR")} />
             </div>
@@ -661,6 +663,7 @@ export default function OrderDetailPage() {
         </div>
 
         <div className="space-y-6">
+          {isAdmin && (
           <section className="bg-graphite-900 border border-graphite-800 rounded-2xl p-6 shadow-card">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-lg font-semibold">Orçamento</h2>
@@ -804,6 +807,7 @@ export default function OrderDetailPage() {
               <span className="text-xl font-bold text-emerald-450">{formatCurrency(total)}</span>
             </div>
           </section>
+          )}
         </div>
       </div>
     </div>
