@@ -26,8 +26,8 @@ import { cn } from "@/lib/utils";
 const nav = [
   { href: "/painel", label: "Dashboard", icon: LayoutDashboard, adminOnly: true },
   { href: "/painel/os", label: "Ordens de Serviço", icon: ClipboardList, adminOnly: false },
-  { href: "/painel/orcamentos", label: "Orçamentos", icon: FileText, adminOnly: false },
-  { href: "/painel/agenda", label: "Agenda", icon: CalendarDays, adminOnly: false },
+  { href: "/painel/orcamentos", label: "Orçamentos", icon: FileText, adminOnly: true },
+  { href: "/painel/agenda", label: "Agenda", icon: CalendarDays, adminOnly: true },
   { href: "/painel/contratos", label: "Contratos", icon: Receipt, adminOnly: true },
   { href: "/painel/catalogo", label: "Catálogo", icon: Tags, adminOnly: true },
   { href: "/painel/clientes", label: "Clientes", icon: Users, adminOnly: true },
@@ -52,6 +52,8 @@ const ADMIN_ONLY_PREFIXES = [
   "/painel/contratos",
   "/painel/catalogo",
   "/painel/clientes",
+  "/painel/orcamentos",
+  "/painel/agenda",
 ];
 
 // Para onde o Técnico é levado quando tenta acessar algo bloqueado (o

@@ -36,7 +36,7 @@ import {
   MyProfile,
 } from "@/services/storage";
 import { OrderService, OrderStatus, OrderPriority, PaymentStatus, CatalogItem } from "@/types";
-import { formatCurrency, formatPhone, statusLabels, priorityLabels, priorityColors, paymentStatusLabels, paymentStatusColors } from "@/lib/utils";
+import { formatCurrency, formatPhone, statusLabels, statusColors, priorityLabels, priorityColors, paymentStatusLabels, paymentStatusColors } from "@/lib/utils";
 import { cn } from "@/lib/utils";
 import Link from "next/link";
 import {
@@ -98,6 +98,7 @@ export default function OrderDetailPage() {
   const [profile, setProfile] = useState<MyProfile | null>(null);
   const [technicians, setTechnicians] = useState<{ id: string; full_name: string }[]>([]);
   const [assigning, setAssigning] = useState(false);
+  const isAdmin = profile?.role === "admin";
 
   useEffect(() => {
     refresh();
@@ -444,44 +445,57 @@ export default function OrderDetailPage() {
           <ArrowLeft className="w-4 h-4" /> Voltar
         </Button>
         <div className="flex items-center gap-3">
-          <Select value={order.status} onValueChange={(v) => handleStatusChange(v as OrderStatus)}>
-            <SelectTrigger className="w-[180px]">
-              <SelectValue placeholder="Status" />
-            </SelectTrigger>
-            <SelectContent>
-              {statusOptions.map((s) => (
-                <SelectItem key={s} value={s}>{statusLabels[s]}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Select value={order.priority} onValueChange={(v) => handlePriorityChange(v as OrderPriority)}>
-            <SelectTrigger className="w-[150px]">
-              <SelectValue placeholder="Prioridade" />
-            </SelectTrigger>
-            <SelectContent>
-              {priorityOptions.map((p) => (
-                <SelectItem key={p} value={p}>{priorityLabels[p]}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Select value={order.paymentStatus} onValueChange={(v) => handlePaymentStatusChange(v as PaymentStatus)}>
-            <SelectTrigger className="w-[190px]">
-              <SelectValue placeholder="Pagamento" />
-            </SelectTrigger>
-            <SelectContent>
-              {paymentStatusOptions.map((p) => (
-                <SelectItem key={p} value={p}>{paymentStatusLabels[p]}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Button variant="outline" onClick={generatePDF} className="gap-2">
-            <FileDown className="w-4 h-4" /> PDF
-          </Button>
-          <Link href={`/painel/os/${id}/recibo`}>
-            <Button variant="outline" className="gap-2">
-              <Receipt className="w-4 h-4" /> 🧾 PDF Recibo
-            </Button>
-          </Link>
+          {isAdmin ? (
+            <>
+              <Select value={order.status} onValueChange={(v) => handleStatusChange(v as OrderStatus)}>
+                <SelectTrigger className="w-[180px]">
+                  <SelectValue placeholder="Status" />
+                </SelectTrigger>
+                <SelectContent>
+                  {statusOptions.map((s) => (
+                    <SelectItem key={s} value={s}>{statusLabels[s]}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Select value={order.priority} onValueChange={(v) => handlePriorityChange(v as OrderPriority)}>
+                <SelectTrigger className="w-[150px]">
+                  <SelectValue placeholder="Prioridade" />
+                </SelectTrigger>
+                <SelectContent>
+                  {priorityOptions.map((p) => (
+                    <SelectItem key={p} value={p}>{priorityLabels[p]}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Select value={order.paymentStatus} onValueChange={(v) => handlePaymentStatusChange(v as PaymentStatus)}>
+                <SelectTrigger className="w-[190px]">
+                  <SelectValue placeholder="Pagamento" />
+                </SelectTrigger>
+                <SelectContent>
+                  {paymentStatusOptions.map((p) => (
+                    <SelectItem key={p} value={p}>{paymentStatusLabels[p]}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Button variant="outline" onClick={generatePDF} className="gap-2">
+                <FileDown className="w-4 h-4" /> PDF
+              </Button>
+              <Link href={`/painel/os/${id}/recibo`}>
+                <Button variant="outline" className="gap-2">
+                  <Receipt className="w-4 h-4" /> 🧾 PDF Recibo
+                </Button>
+              </Link>
+            </>
+          ) : (
+            <span
+              className={cn(
+                "text-xs px-3 py-1.5 rounded-full border font-medium",
+                statusColors[order.status]
+              )}
+            >
+              {statusLabels[order.status]}
+            </span>
+          )}
         </div>
       </div>
 
@@ -558,9 +572,10 @@ export default function OrderDetailPage() {
               </Label>
               <Textarea
                 value={descriptionDraft}
-                onChange={(e) => setDescriptionDraft(e.target.value)}
-                onBlur={handleDescriptionBlur}
-                className="bg-graphite-950 min-h-[100px]"
+                onChange={(e) => isAdmin && setDescriptionDraft(e.target.value)}
+                onBlur={isAdmin ? handleDescriptionBlur : undefined}
+                readOnly={!isAdmin}
+                className={cn("bg-graphite-950 min-h-[100px]", !isAdmin && "opacity-80 cursor-default")}
               />
             </div>
           </section>
@@ -649,20 +664,21 @@ export default function OrderDetailPage() {
           <section className="bg-graphite-900 border border-graphite-800 rounded-2xl p-6 shadow-card">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-lg font-semibold">Orçamento</h2>
-              <Dialog open={itemDialogOpen} onOpenChange={setItemDialogOpen}>
-                <DialogTrigger asChild>
-                  <Button size="sm" className="gap-1">
-                    <Plus className="w-4 h-4" /> Item
-                  </Button>
-                </DialogTrigger>
-                <DialogContent>
-                  <DialogHeader>
-                    <DialogTitle>Adicionar Item</DialogTitle>
-                  </DialogHeader>
-                  <div className="space-y-4 mt-2">
-                    <div className="space-y-1.5">
-                      <Label>Adicionar do catálogo (opcional)</Label>
-                      <Select onValueChange={selectCatalogItem}>
+              {isAdmin && (
+                <Dialog open={itemDialogOpen} onOpenChange={setItemDialogOpen}>
+                  <DialogTrigger asChild>
+                    <Button size="sm" className="gap-1">
+                      <Plus className="w-4 h-4" /> Item
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent>
+                    <DialogHeader>
+                      <DialogTitle>Adicionar Item</DialogTitle>
+                    </DialogHeader>
+                    <div className="space-y-4 mt-2">
+                      <div className="space-y-1.5">
+                        <Label>Adicionar do catálogo (opcional)</Label>
+                        <Select onValueChange={selectCatalogItem}>
                         <SelectTrigger>
                           <SelectValue placeholder="Selecione um item" />
                         </SelectTrigger>
@@ -742,6 +758,7 @@ export default function OrderDetailPage() {
                   </div>
                 </DialogContent>
               </Dialog>
+              )}
             </div>
 
             <div className="space-y-2">
@@ -768,12 +785,14 @@ export default function OrderDetailPage() {
                     </div>
                     <div className="flex items-center gap-3">
                       <span className="text-sm font-semibold">{formatCurrency(item.total)}</span>
-                      <button
-                        onClick={() => handleRemoveItem(item.id)}
-                        className="text-graphite-500 hover:text-danger"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
+                      {isAdmin && (
+                        <button
+                          onClick={() => handleRemoveItem(item.id)}
+                          className="text-graphite-500 hover:text-danger"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      )}
                     </div>
                   </div>
                 ))

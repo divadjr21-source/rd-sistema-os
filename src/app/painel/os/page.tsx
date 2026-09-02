@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { getOrders, getClients, createOrderManual, deleteOrder, uploadMediaFiles } from "@/services/storage";
+import { getOrders, getClients, createOrderManual, deleteOrder, uploadMediaFiles, getMyProfile, MyProfile } from "@/services/storage";
 import { OrderService, Client, OrderStatus, OrderPriority, PaymentStatus } from "@/types";
 import {
   formatPhone,
@@ -89,6 +89,8 @@ export default function OrdersListPage() {
   const router = useRouter();
   const [orders, setOrders] = useState<OrderService[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
+  const [profile, setProfile] = useState<MyProfile | null>(null);
+  const isAdmin = profile?.role === "admin";
   const [search, setSearch] = useState("");
   const [modalOpen, setModalOpen] = useState(false);
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
@@ -127,6 +129,7 @@ export default function OrdersListPage() {
 
   useEffect(() => {
     refresh();
+    getMyProfile().then(setProfile);
   }, []);
 
   const refresh = async () => {
@@ -317,16 +320,17 @@ export default function OrdersListPage() {
           <h1 className="text-2xl font-bold">Ordens de Serviço</h1>
           <p className="text-graphite-400">Gerencie todas as O.S. abertas</p>
         </div>
-        <Dialog open={modalOpen} onOpenChange={setModalOpen}>
-          <DialogTrigger asChild>
-            <Button className="gap-2">
-              <Plus className="w-4 h-4" /> Nova O.S. Manual
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
-            <DialogHeader>
-              <DialogTitle>Nova O.S. Manual</DialogTitle>
-            </DialogHeader>
+        {isAdmin && (
+          <Dialog open={modalOpen} onOpenChange={setModalOpen}>
+            <DialogTrigger asChild>
+              <Button className="gap-2">
+                <Plus className="w-4 h-4" /> Nova O.S. Manual
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+              <DialogHeader>
+                <DialogTitle>Nova O.S. Manual</DialogTitle>
+              </DialogHeader>
             <form onSubmit={handleSubmit} className="space-y-4 mt-2">
               <div className="space-y-1.5">
                 <Label>Cliente</Label>
@@ -537,6 +541,7 @@ export default function OrdersListPage() {
             </form>
           </DialogContent>
         </Dialog>
+        )}
       </div>
 
       <div className="bg-graphite-900 border border-graphite-800 rounded-2xl p-5 shadow-card">
@@ -556,10 +561,10 @@ export default function OrdersListPage() {
               <tr className="border-b border-graphite-800 text-graphite-400">
                 <th className="py-3 px-3 font-medium">OS</th>
                 <th className="py-3 px-3 font-medium">Cliente</th>
-                <th className="py-3 px-3 font-medium">Telefone</th>
+                {isAdmin && <th className="py-3 px-3 font-medium">Telefone</th>}
                 <th className="py-3 px-3 font-medium">Status</th>
                 <th className="py-3 px-3 font-medium">Prioridade</th>
-                <th className="py-3 px-3 font-medium">Pagamento</th>
+                {isAdmin && <th className="py-3 px-3 font-medium">Pagamento</th>}
                 <th className="py-3 px-3 font-medium">Abertura</th>
                 <th className="py-3 px-3 font-medium text-right">Ações</th>
               </tr>
@@ -569,7 +574,9 @@ export default function OrdersListPage() {
                 <tr key={order.id} className="hover:bg-graphite-800/50 transition">
                   <td className="py-3 px-3 font-semibold text-emerald-450">#{order.number}</td>
                   <td className="py-3 px-3">{order.client.fullName}</td>
-                  <td className="py-3 px-3 text-graphite-400">{formatPhone(order.client.phone)}</td>
+                  {isAdmin && (
+                    <td className="py-3 px-3 text-graphite-400">{formatPhone(order.client.phone)}</td>
+                  )}
                   <td className="py-3 px-3">
                     <span
                       className={cn(
@@ -590,16 +597,18 @@ export default function OrdersListPage() {
                       {priorityLabels[order.priority]}
                     </span>
                   </td>
-                  <td className="py-3 px-3">
-                    <span
-                      className={cn(
-                        "text-xs px-2 py-0.5 rounded-full border whitespace-nowrap",
-                        paymentStatusColors[order.paymentStatus]
-                      )}
-                    >
-                      {paymentStatusLabels[order.paymentStatus]}
-                    </span>
-                  </td>
+                  {isAdmin && (
+                    <td className="py-3 px-3">
+                      <span
+                        className={cn(
+                          "text-xs px-2 py-0.5 rounded-full border whitespace-nowrap",
+                          paymentStatusColors[order.paymentStatus]
+                        )}
+                      >
+                        {paymentStatusLabels[order.paymentStatus]}
+                      </span>
+                    </td>
+                  )}
                   <td className="py-3 px-3 text-graphite-400">{new Date(order.createdAt).toLocaleDateString("pt-BR")}</td>
                   <td className="py-3 px-3 text-right">
                     <div className="flex items-center justify-end gap-3">
@@ -608,29 +617,33 @@ export default function OrdersListPage() {
                           <Eye className="w-4 h-4" /> Ver
                         </button>
                       </Link>
-                      <a
-                        href={whatsappLink(order.client.phone, buildWhatsappMessage(order))}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1 text-emerald-450 hover:underline"
-                        title="Enviar WhatsApp"
-                      >
-                        <Send className="w-4 h-4" />
-                      </a>
-                      <button
-                        onClick={() => openEdit(order)}
-                        className="inline-flex items-center gap-1 text-graphite-400 hover:text-emerald-450 transition"
-                        title="Editar O.S."
-                      >
-                        <Pencil className="w-4 h-4" />
-                      </button>
-                      <button
-                        onClick={() => confirmDelete(order)}
-                        className="inline-flex items-center gap-1 text-danger hover:text-danger/80 transition"
-                        title="Excluir O.S."
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
+                      {isAdmin && (
+                        <>
+                          <a
+                            href={whatsappLink(order.client.phone, buildWhatsappMessage(order))}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1 text-emerald-450 hover:underline"
+                            title="Enviar WhatsApp"
+                          >
+                            <Send className="w-4 h-4" />
+                          </a>
+                          <button
+                            onClick={() => openEdit(order)}
+                            className="inline-flex items-center gap-1 text-graphite-400 hover:text-emerald-450 transition"
+                            title="Editar O.S."
+                          >
+                            <Pencil className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={() => confirmDelete(order)}
+                            className="inline-flex items-center gap-1 text-danger hover:text-danger/80 transition"
+                            title="Excluir O.S."
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </>
+                      )}
                     </div>
                   </td>
                 </tr>
@@ -647,7 +660,7 @@ export default function OrdersListPage() {
         </div>
       </div>
 
-      <Dialog open={deleteModalOpen} onOpenChange={setDeleteModalOpen}>
+      <Dialog open={deleteModalOpen && isAdmin} onOpenChange={setDeleteModalOpen}>
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
