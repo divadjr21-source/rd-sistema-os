@@ -16,6 +16,9 @@ import {
   CostProject,
   CostProjectPurchase,
   CostProjectTechnicianDay,
+  TechnicalReport,
+  TechnicalReportPhoto,
+  TechnicalReportStatus,
 } from "@/types";
 
 const supabase = createSupabaseClient();
@@ -1220,5 +1223,159 @@ export async function updateCostTechnicianDay(
 
 export async function deleteCostTechnicianDay(id: string): Promise<void> {
   const { error } = await supabase.from("cost_project_technician_days").delete().eq("id", id);
+  if (error) throw error;
+}
+
+// --- Relatórios Técnicos ---
+
+type DbTechnicalReport = {
+  id: string;
+  order_id: string;
+  report_number: string;
+  title: string;
+  work_performed: string;
+  observations: string;
+  technician_name: string;
+  status: TechnicalReportStatus;
+  created_at: string;
+  updated_at: string;
+  orders: DbOrder | null;
+  technical_report_photos: DbReportPhoto[] | null;
+};
+
+type DbReportPhoto = {
+  id: string;
+  report_id: string;
+  url: string;
+  caption: string;
+  created_at: string;
+};
+
+function mapReportPhoto(row: DbReportPhoto): TechnicalReportPhoto {
+  return { id: row.id, reportId: row.report_id, url: row.url, caption: row.caption, createdAt: row.created_at };
+}
+
+function mapTechnicalReport(row: DbTechnicalReport): TechnicalReport {
+  return {
+    id: row.id,
+    orderId: row.order_id,
+    order: row.orders ? mapOrder(row.orders) : undefined,
+    reportNumber: row.report_number,
+    title: row.title,
+    workPerformed: row.work_performed,
+    observations: row.observations,
+    technicianName: row.technician_name,
+    status: row.status,
+    photos: (row.technical_report_photos || []).map(mapReportPhoto),
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+const TECHNICAL_REPORT_SELECT = `
+  *,
+  orders(*, clients(*), order_media(*), budget_items(*)),
+  technical_report_photos(*)
+`;
+
+export async function getTechnicalReports(): Promise<TechnicalReport[]> {
+  const { data, error } = await supabase
+    .from("technical_reports")
+    .select(TECHNICAL_REPORT_SELECT)
+    .order("created_at", { ascending: false });
+  if (error) throw error;
+  return (data || []).map(mapTechnicalReport);
+}
+
+export async function getTechnicalReportById(id: string): Promise<TechnicalReport | undefined> {
+  const { data, error } = await supabase
+    .from("technical_reports")
+    .select(TECHNICAL_REPORT_SELECT)
+    .eq("id", id)
+    .maybeSingle();
+  if (error) throw error;
+  return data ? mapTechnicalReport(data) : undefined;
+}
+
+// Usada pela página pública (sem login) de visualização do relatório.
+export async function getPublicTechnicalReport(id: string): Promise<TechnicalReport | undefined> {
+  const { data, error } = await supabase
+    .from("technical_reports")
+    .select(TECHNICAL_REPORT_SELECT)
+    .eq("id", id)
+    .eq("status", "finalizado")
+    .maybeSingle();
+  if (error) throw error;
+  return data ? mapTechnicalReport(data) : undefined;
+}
+
+export async function createTechnicalReport(orderId: string, technicianName: string): Promise<TechnicalReport> {
+  const { data, error } = await supabase
+    .from("technical_reports")
+    .insert({ order_id: orderId, technician_name: technicianName })
+    .select(TECHNICAL_REPORT_SELECT)
+    .single();
+  if (error) throw error;
+  return mapTechnicalReport(data);
+}
+
+export async function updateTechnicalReport(
+  id: string,
+  data: { title: string; workPerformed: string; observations: string; technicianName: string }
+): Promise<void> {
+  const { error } = await supabase
+    .from("technical_reports")
+    .update({
+      title: data.title,
+      work_performed: data.workPerformed,
+      observations: data.observations,
+      technician_name: data.technicianName,
+    })
+    .eq("id", id);
+  if (error) throw error;
+}
+
+export async function finalizeTechnicalReport(id: string): Promise<void> {
+  const { error } = await supabase.from("technical_reports").update({ status: "finalizado" }).eq("id", id);
+  if (error) throw error;
+}
+
+export async function reopenTechnicalReport(id: string): Promise<void> {
+  const { error } = await supabase.from("technical_reports").update({ status: "rascunho" }).eq("id", id);
+  if (error) throw error;
+}
+
+export async function deleteTechnicalReport(id: string): Promise<void> {
+  const { error } = await supabase.from("technical_reports").delete().eq("id", id);
+  if (error) throw error;
+}
+
+export async function uploadReportPhotos(
+  reportId: string,
+  files: File[]
+): Promise<void> {
+  for (const file of files) {
+    const ext = file.name.split(".").pop() || "jpg";
+    const path = `technical-reports/${reportId}/${Date.now()}-${Math.random().toString(36).slice(2, 9)}.${ext}`;
+    const { error: uploadError } = await supabase.storage.from("order-media").upload(path, file, {
+      cacheControl: "3600",
+      upsert: false,
+    });
+    if (uploadError) throw uploadError;
+    const {
+      data: { publicUrl },
+    } = supabase.storage.from("order-media").getPublicUrl(path);
+    const { error } = await supabase.from("technical_report_photos").insert({ report_id: reportId, url: publicUrl });
+    if (error) throw error;
+  }
+}
+
+export async function updateReportPhotoCaption(id: string, caption: string): Promise<void> {
+  const { error } = await supabase.from("technical_report_photos").update({ caption }).eq("id", id);
+  if (error) throw error;
+}
+
+export async function deleteReportPhoto(id: string): Promise<void> {
+  const { error } = await supabase.from("technical_report_photos").delete().eq("id", id);
   if (error) throw error;
 }

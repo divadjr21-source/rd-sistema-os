@@ -145,3 +145,30 @@ export interface CostProject {
   createdAt: string;
 }
 
+// --- Relatórios Técnicos ---
+
+export type TechnicalReportStatus = "rascunho" | "finalizado";
+
+export interface TechnicalReportPhoto {
+  id: string;
+  reportId: string;
+  url: string;
+  caption: string;
+  createdAt: string;
+}
+
+export interface TechnicalReport {
+  id: string;
+  orderId: string;
+  order?: OrderService;
+  reportNumber: string;
+  title: string;
+  workPerformed: string;
+  observations: string;
+  technicianName: string;
+  status: TechnicalReportStatus;
+  photos: TechnicalReportPhoto[];
+  createdAt: string;
+  updatedAt: string;
+}
+
