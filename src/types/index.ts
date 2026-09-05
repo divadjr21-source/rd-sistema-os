@@ -94,6 +94,7 @@ export interface ContractInvoice {
   referenceYear: number;
   amount: number;
   sentAt?: string;
+  paidAt?: string;
   createdAt: string;
 }
 

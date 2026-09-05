@@ -26,8 +26,17 @@ CREATE TABLE IF NOT EXISTS public.technical_report_photos (
 ALTER TABLE public.technical_reports ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.technical_report_photos ENABLE ROW LEVEL SECURITY;
 
--- Atualiza automaticamente updated_at (reaproveita a função já existente,
--- criada na migration de contratos).
+-- Garante que a função existe (idempotente), sem depender de ela já ter
+-- sido criada por uma migration anterior.
+CREATE OR REPLACE FUNCTION public.set_updated_at()
+RETURNS trigger AS $$
+BEGIN
+  NEW.updated_at = now();
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Atualiza automaticamente updated_at.
 DROP TRIGGER IF EXISTS trg_technical_reports_updated_at ON public.technical_reports;
 CREATE TRIGGER trg_technical_reports_updated_at
   BEFORE UPDATE ON public.technical_reports

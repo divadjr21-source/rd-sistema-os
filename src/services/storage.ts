@@ -102,6 +102,7 @@ type DbContractInvoice = {
   reference_year: number;
   amount: number;
   sent_at: string | null;
+  paid_at: string | null;
   created_at: string;
 };
 
@@ -215,6 +216,7 @@ function mapContractInvoice(row: DbContractInvoice): ContractInvoice {
     referenceYear: row.reference_year,
     amount: row.amount,
     sentAt: row.sent_at || undefined,
+    paidAt: row.paid_at || undefined,
     createdAt: row.created_at,
   };
 }
@@ -945,6 +947,47 @@ export async function markInvoiceAsSent(
       reference_year: year,
       amount,
       sent_at: new Date().toISOString(),
+    })
+    .select()
+    .single();
+  if (error) throw error;
+  return mapContractInvoice(row);
+}
+
+export async function markInvoiceAsPaid(
+  contractId: string,
+  month: number,
+  year: number,
+  amount: number
+): Promise<ContractInvoice> {
+  const { data: existing, error: findError } = await supabase
+    .from("contract_invoices")
+    .select("*")
+    .eq("contract_id", contractId)
+    .eq("reference_month", month)
+    .eq("reference_year", year)
+    .maybeSingle();
+  if (findError) throw findError;
+
+  if (existing) {
+    const { data: row, error } = await supabase
+      .from("contract_invoices")
+      .update({ paid_at: new Date().toISOString(), amount })
+      .eq("id", existing.id)
+      .select()
+      .single();
+    if (error) throw error;
+    return mapContractInvoice(row);
+  }
+
+  const { data: row, error } = await supabase
+    .from("contract_invoices")
+    .insert({
+      contract_id: contractId,
+      reference_month: month,
+      reference_year: year,
+      amount,
+      paid_at: new Date().toISOString(),
     })
     .select()
     .single();

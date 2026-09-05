@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useState, useMemo } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { getOrders, getPendingInvoices, markInvoiceAsSent, getAppointments } from "@/services/storage";
+import { getOrders, getPendingInvoices, markInvoiceAsSent, markInvoiceAsPaid, getAppointments } from "@/services/storage";
 import { OrderService, OrderStatus } from "@/types";
 import { formatCurrency, statusLabels, statusColors, priorityLabels, priorityColors, paymentStatusLabels, paymentStatusColors, toBrazilDateKey, whatsappLink } from "@/lib/utils";
 import {
@@ -37,9 +38,14 @@ const columns: { status: OrderStatus; label: string }[] = [
 ];
 
 export default function DashboardPage() {
+  const router = useRouter();
   const [orders, setOrders] = useState<OrderService[]>([]);
   const [pendingInvoices, setPendingInvoices] = useState<
-    { contract: { id: string; title: string; client: { fullName: string }; monthlyValue: number }; invoice: { sentAt?: string } | null; nfIssueDay: number }[]
+    {
+      contract: { id: string; title: string; client: { fullName: string; phone: string }; monthlyValue: number };
+      invoice: { sentAt?: string; paidAt?: string } | null;
+      nfIssueDay: number;
+    }[]
   >([]);
   const [appointments, setAppointments] = useState<{ id: string; title: string; scheduledAt: string; client?: { fullName: string } }[]>([]);
   const [loading, setLoading] = useState(true);
@@ -109,6 +115,26 @@ export default function DashboardPage() {
     }
   };
 
+  const handleMarkPaid = async (contractId: string, amount: number) => {
+    const month = currentMonth.getMonth() + 1;
+    const year = currentMonth.getFullYear();
+    try {
+      await markInvoiceAsPaid(contractId, month, year, amount);
+      const updated = await getPendingInvoices(month, year).catch(() => []);
+      setPendingInvoices(
+        (updated || []).map((i) => ({
+          contract: i.contract,
+          invoice: i.invoice,
+          nfIssueDay: i.contract.nfIssueDay,
+        }))
+      );
+      toast({ title: "Pagamento do contrato registrado", variant: "success" });
+      router.refresh();
+    } catch (error) {
+      toastError(error, "Não foi possível marcar o contrato como pago");
+    }
+  };
+
   const today = new Date();
   const todayStr = format(today, "yyyy-MM-dd");
   const todayCount = orders.filter((o) => o.createdAt.slice(0, 10) === todayStr).length;
@@ -127,12 +153,20 @@ export default function DashboardPage() {
   });
 
   // O.S. finalizadas mas ainda não pagas — lembrete pra cobrar o cliente.
-  const cobrancasPendentes = orders
+  const cobrancasPendentesOS = orders
     .filter((o) => o.status === "finalizado" && o.paymentStatus === "aguardando")
     .map((o) => {
       const total = (o.budgetItems || []).reduce((acc, item) => acc + item.total, 0);
-      return { order: o, total };
+      return { type: "os" as const, id: o.id, order: o, total };
     });
+
+  // Contratos mensais cujo dia de pagamento já passou neste mês e ainda
+  // não foram marcados como pagos.
+  const cobrancasPendentesContratos = pendingInvoices
+    .filter((p) => !p.invoice?.paidAt && p.nfIssueDay < currentDay)
+    .map((p) => ({ type: "contrato" as const, id: p.contract.id, contract: p.contract }));
+
+  const cobrancasPendentes = [...cobrancasPendentesOS, ...cobrancasPendentesContratos];
 
   const appointmentsToday = appointments.filter((a) => {
     if (!a.scheduledAt) return false;
@@ -231,6 +265,8 @@ export default function DashboardPage() {
                 invoiceDay={p.nfIssueDay}
                 alertType="hoje"
                 onMarkSent={() => handleMarkSent(p.contract.id, p.contract.monthlyValue)}
+                onMarkPaid={() => handleMarkPaid(p.contract.id, p.contract.monthlyValue)}
+                isPaid={!!p.invoice?.paidAt}
               />
             ))}
             {vencendoProximos3.map((p) => (
@@ -240,6 +276,8 @@ export default function DashboardPage() {
                 invoiceDay={p.nfIssueDay}
                 alertType="proximo"
                 onMarkSent={() => handleMarkSent(p.contract.id, p.contract.monthlyValue)}
+                onMarkPaid={() => handleMarkPaid(p.contract.id, p.contract.monthlyValue)}
+                isPaid={!!p.invoice?.paidAt}
               />
             ))}
             {vencidas.map((p) => (
@@ -249,6 +287,8 @@ export default function DashboardPage() {
                 invoiceDay={p.nfIssueDay}
                 alertType="atrasada"
                 onMarkSent={() => handleMarkSent(p.contract.id, p.contract.monthlyValue)}
+                onMarkPaid={() => handleMarkPaid(p.contract.id, p.contract.monthlyValue)}
+                isPaid={!!p.invoice?.paidAt}
               />
             ))}
           </div>
@@ -265,37 +305,79 @@ export default function DashboardPage() {
             </span>
           </div>
           <p className="text-xs text-graphite-500 mb-4">
-            O.S. finalizadas que ainda estão aguardando pagamento — entre em contato com o cliente.
+            O.S. finalizadas e contratos mensais com pagamento pendente — entre em contato com o cliente.
           </p>
           <div className="space-y-2">
-            {cobrancasPendentes.map(({ order, total }) => (
-              <div
-                key={order.id}
-                className="flex flex-wrap items-center justify-between gap-3 bg-graphite-950 border border-graphite-800 rounded-xl p-3"
-              >
-                <Link href={`/painel/os/${order.id}`} className="min-w-0">
-                  <p className="font-medium text-sm hover:underline">
-                    #{order.number} — {order.client.fullName}
-                  </p>
-                  <p className="text-xs text-graphite-400 truncate">{order.description}</p>
-                </Link>
-                <div className="flex items-center gap-3 flex-shrink-0">
-                  <span className="text-sm font-semibold text-danger">{formatCurrency(total)}</span>
-                  <a
-                    href={whatsappLink(
-                      order.client.phone,
-                      `Olá ${order.client.fullName}! Passando para lembrar sobre o pagamento pendente da O.S. nº ${order.number} (${formatCurrency(total)}). Qualquer dúvida, estou à disposição!`
-                    )}
-                    target="_blank"
-                    rel="noopener noreferrer"
+            {cobrancasPendentes.map((item) => {
+              if (item.type === "os") {
+                const { order, total } = item;
+                return (
+                  <div
+                    key={`os-${order.id}`}
+                    className="flex flex-wrap items-center justify-between gap-3 bg-graphite-950 border border-graphite-800 rounded-xl p-3"
                   >
-                    <Button size="sm" variant="outline" className="gap-1.5">
-                      <MessageCircle className="w-3.5 h-3.5" /> Cobrar
+                    <Link href={`/painel/os/${order.id}`} className="min-w-0">
+                      <p className="font-medium text-sm hover:underline">
+                        #{order.number} — {order.client.fullName}
+                      </p>
+                      <p className="text-xs text-graphite-400 truncate">{order.description}</p>
+                    </Link>
+                    <div className="flex items-center gap-3 flex-shrink-0">
+                      <span className="text-sm font-semibold text-danger">{formatCurrency(total)}</span>
+                      <a
+                        href={whatsappLink(
+                          order.client.phone,
+                          `Olá ${order.client.fullName}! Passando para lembrar sobre o pagamento pendente da O.S. nº ${order.number} (${formatCurrency(total)}). Qualquer dúvida, estou à disposição!`
+                        )}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                      >
+                        <Button size="sm" variant="outline" className="gap-1.5">
+                          <MessageCircle className="w-3.5 h-3.5" /> Cobrar
+                        </Button>
+                      </a>
+                    </div>
+                  </div>
+                );
+              }
+
+              const { contract } = item;
+              return (
+                <div
+                  key={`contrato-${contract.id}`}
+                  className="flex flex-wrap items-center justify-between gap-3 bg-graphite-950 border border-graphite-800 rounded-xl p-3"
+                >
+                  <Link href="/painel/contratos" className="min-w-0">
+                    <p className="font-medium text-sm hover:underline">
+                      {contract.title} — {contract.client.fullName}
+                    </p>
+                    <p className="text-xs text-graphite-400">Contrato Mensal — pagamento atrasado</p>
+                  </Link>
+                  <div className="flex items-center gap-3 flex-shrink-0">
+                    <span className="text-sm font-semibold text-danger">{formatCurrency(contract.monthlyValue)}</span>
+                    <a
+                      href={whatsappLink(
+                        contract.client.phone,
+                        `Olá ${contract.client.fullName}! Passando para lembrar sobre o pagamento pendente do contrato "${contract.title}" (${formatCurrency(contract.monthlyValue)}). Qualquer dúvida, estou à disposição!`
+                      )}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      <Button size="sm" variant="outline" className="gap-1.5">
+                        <MessageCircle className="w-3.5 h-3.5" /> Cobrar
+                      </Button>
+                    </a>
+                    <Button
+                      size="sm"
+                      className="gap-1.5"
+                      onClick={() => handleMarkPaid(contract.id, contract.monthlyValue)}
+                    >
+                      Marcar Paga
                     </Button>
-                  </a>
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       )}
@@ -542,11 +624,15 @@ function InvoiceAlertRow({
   invoiceDay,
   alertType,
   onMarkSent,
+  onMarkPaid,
+  isPaid,
 }: {
   contract: { id: string; title: string; client: { fullName: string }; monthlyValue: number };
   invoiceDay: number;
   alertType: "hoje" | "proximo" | "atrasada";
   onMarkSent: () => void;
+  onMarkPaid: () => void;
+  isPaid?: boolean;
 }) {
   const config = {
     hoje: { icon: Clock, color: "bg-warning/10 text-warning", label: "Vence hoje" },
@@ -569,9 +655,14 @@ function InvoiceAlertRow({
           </p>
         </div>
       </div>
-      <Button size="sm" className="gap-2 shrink-0" onClick={onMarkSent}>
-        <Send className="w-4 h-4" /> Marcar como Enviada
-      </Button>
+      <div className="flex gap-2 shrink-0">
+        <Button size="sm" variant="outline" className="gap-2" onClick={onMarkSent}>
+          <Send className="w-4 h-4" /> Marcar como Enviada
+        </Button>
+        <Button size="sm" className="gap-2" onClick={onMarkPaid} disabled={isPaid}>
+          <DollarSign className="w-4 h-4" /> {isPaid ? "Paga" : "Marcar como Paga"}
+        </Button>
+      </div>
     </div>
   );
 }
