@@ -27,6 +27,7 @@ import {
   updateContract,
   deleteContract,
   createAppointment,
+  updateContractPaymentStatus,
 } from "@/services/storage";
 import { Contract, Client } from "@/types";
 import { formatCurrency, formatPhone, buildBrazilTimestamp } from "@/lib/utils";
@@ -145,6 +146,21 @@ export default function ContractsPage() {
   const confirmDelete = (contract: Contract) => {
     setContractToDelete(contract);
     setDeleteModalOpen(true);
+  };
+
+  const handleTogglePayment = async (contract: Contract) => {
+    const next = contract.paymentStatus === "paga" ? "aguardando" : "paga";
+    try {
+      await updateContractPaymentStatus(contract.id, next);
+      await refresh();
+      toast({
+        title: next === "paga" ? "Contrato marcado como pago" : "Contrato marcado como aguardando pagamento",
+        variant: "success",
+      });
+      router.refresh();
+    } catch (error) {
+      alert(extractErrorMessage(error));
+    }
   };
 
   // Sugere a próxima data com o "Dia de Emissão da NF" do contrato: se o
@@ -394,6 +410,19 @@ export default function ContractsPage() {
                   <Calendar className="w-4 h-4 text-emerald-450" /> NF emitida todo dia {contract.nfIssueDay}
                 </div>
               </div>
+
+              <button
+                onClick={() => handleTogglePayment(contract)}
+                className={cn(
+                  "mt-3 w-full text-xs px-2.5 py-1.5 rounded-lg border font-medium transition",
+                  contract.paymentStatus === "paga"
+                    ? "bg-emerald-450/10 text-emerald-450 border-emerald-450/30 hover:bg-emerald-450/20"
+                    : "bg-warning/10 text-warning border-warning/30 hover:bg-warning/20"
+                )}
+                title="Clique para alternar"
+              >
+                {contract.paymentStatus === "paga" ? "✓ Paga" : "Aguardando Pagamento"}
+              </button>
             </div>
           ))}
           {filtered.length === 0 && (

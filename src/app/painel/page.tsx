@@ -3,8 +3,8 @@
 import { useEffect, useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { getOrders, getPendingInvoices, markInvoiceAsSent, markInvoiceAsPaid, getAppointments } from "@/services/storage";
-import { OrderService, OrderStatus } from "@/types";
+import { getOrders, getPendingInvoices, markInvoiceAsSent, markInvoiceAsPaid, getAppointments, getActiveContracts, updateContractPaymentStatus } from "@/services/storage";
+import { OrderService, OrderStatus, Contract } from "@/types";
 import { formatCurrency, statusLabels, statusColors, priorityLabels, priorityColors, paymentStatusLabels, paymentStatusColors, toBrazilDateKey, whatsappLink } from "@/lib/utils";
 import {
   ClipboardList,
@@ -40,6 +40,7 @@ const columns: { status: OrderStatus; label: string }[] = [
 export default function DashboardPage() {
   const router = useRouter();
   const [orders, setOrders] = useState<OrderService[]>([]);
+  const [contracts, setContracts] = useState<Contract[]>([]);
   const [pendingInvoices, setPendingInvoices] = useState<
     {
       contract: { id: string; title: string; client: { fullName: string; phone: string }; monthlyValue: number };
@@ -60,13 +61,15 @@ export default function DashboardPage() {
         const month = currentMonth.getMonth() + 1;
         const year = currentMonth.getFullYear();
 
-        const [ordersData, invoicesData, appointmentsData] = await Promise.all([
+        const [ordersData, invoicesData, appointmentsData, contractsData] = await Promise.all([
           getOrders(),
           getPendingInvoices(month, year).catch(() => []),
           getAppointments().catch(() => []),
+          getActiveContracts().catch(() => []),
         ]);
 
         setOrders(ordersData || []);
+        setContracts(contractsData || []);
         setPendingInvoices(
           (invoicesData || []).map((i) => ({
             contract: i.contract,
@@ -135,6 +138,20 @@ export default function DashboardPage() {
     }
   };
 
+  // Marca o campo simples de pagamento do contrato (o mesmo que aparece
+  // no card, na tela de Contratos) como "Paga", tirando-o imediatamente
+  // da lista de Cobranças Pendentes.
+  const handleMarkContractPaid = async (contractId: string) => {
+    try {
+      await updateContractPaymentStatus(contractId, "paga");
+      setContracts((prev) => prev.map((c) => (c.id === contractId ? { ...c, paymentStatus: "paga" } : c)));
+      toast({ title: "Contrato marcado como pago", variant: "success" });
+      router.refresh();
+    } catch (error) {
+      toastError(error, "Não foi possível marcar o contrato como pago");
+    }
+  };
+
   const today = new Date();
   const todayStr = format(today, "yyyy-MM-dd");
   const todayCount = orders.filter((o) => o.createdAt.slice(0, 10) === todayStr).length;
@@ -164,11 +181,11 @@ export default function DashboardPage() {
       return { type: "os" as const, id: o.id, order: o, total };
     });
 
-  // Contratos mensais cujo dia de pagamento já passou neste mês e ainda
-  // não foram marcados como pagos.
-  const cobrancasPendentesContratos = pendingInvoices
-    .filter((p) => !p.invoice?.paidAt && p.nfIssueDay < currentDay)
-    .map((p) => ({ type: "contrato" as const, id: p.contract.id, contract: p.contract }));
+  // Contratos mensais marcados como "Aguardando Pagamento" — simples e
+  // direto, sem depender de data ou mês de referência.
+  const cobrancasPendentesContratos = contracts
+    .filter((c) => c.paymentStatus === "aguardando")
+    .map((c) => ({ type: "contrato" as const, id: c.id, contract: c }));
 
   const cobrancasPendentes = [...cobrancasPendentesOS, ...cobrancasPendentesContratos];
 
@@ -358,7 +375,7 @@ export default function DashboardPage() {
                     <p className="font-medium text-sm hover:underline">
                       {contract.title} — {contract.client.fullName}
                     </p>
-                    <p className="text-xs text-graphite-400">Contrato Mensal — pagamento atrasado</p>
+                    <p className="text-xs text-graphite-400">Contrato Mensal — aguardando pagamento</p>
                   </Link>
                   <div className="flex items-center gap-3 flex-shrink-0">
                     <span className="text-sm font-semibold text-danger">{formatCurrency(contract.monthlyValue)}</span>
@@ -377,7 +394,7 @@ export default function DashboardPage() {
                     <Button
                       size="sm"
                       className="gap-1.5"
-                      onClick={() => handleMarkPaid(contract.id, contract.monthlyValue)}
+                      onClick={() => handleMarkContractPaid(contract.id)}
                     >
                       Marcar Paga
                     </Button>

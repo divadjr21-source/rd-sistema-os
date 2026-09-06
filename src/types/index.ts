@@ -83,6 +83,7 @@ export interface Contract {
   monthlyValue: number;
   nfIssueDay: number;
   active: boolean;
+  paymentStatus: PaymentStatus;
   createdAt: string;
   updatedAt: string;
 }

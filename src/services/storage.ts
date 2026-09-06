@@ -90,6 +90,7 @@ type DbContract = {
   monthly_value: number;
   nf_issue_day: number;
   active: boolean;
+  payment_status: string | null;
   created_at: string;
   updated_at: string;
   clients: DbClient | null;
@@ -203,6 +204,7 @@ function mapContract(row: DbContract): Contract {
     monthlyValue: row.monthly_value,
     nfIssueDay: row.nf_issue_day,
     active: row.active,
+    paymentStatus: (row.payment_status as PaymentStatus) || "aguardando",
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -869,6 +871,17 @@ export async function updateContract(
   const { data: row, error } = await supabase
     .from("contracts")
     .update(updateData)
+    .eq("id", id)
+    .select("*, clients(*)")
+    .single();
+  if (error) throw error;
+  return mapContract(row);
+}
+
+export async function updateContractPaymentStatus(id: string, paymentStatus: PaymentStatus): Promise<Contract> {
+  const { data: row, error } = await supabase
+    .from("contracts")
+    .update({ payment_status: paymentStatus })
     .eq("id", id)
     .select("*, clients(*)")
     .single();
