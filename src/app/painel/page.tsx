@@ -141,14 +141,18 @@ export default function DashboardPage() {
 
   const currentDay = today.getDate();
 
-  const vencendoHoje = pendingInvoices.filter((p) => !p.invoice?.sentAt && p.nfIssueDay === currentDay);
+  // Aparece se falta enviar a NF OU falta confirmar o pagamento (qualquer
+  // uma das duas pendências mantém o alerta visível).
+  const vencendoHoje = pendingInvoices.filter(
+    (p) => (!p.invoice?.sentAt || !p.invoice?.paidAt) && p.nfIssueDay === currentDay
+  );
   const vencendoProximos3 = pendingInvoices.filter((p) => {
-    if (p.invoice?.sentAt) return false;
+    if (p.invoice?.sentAt && p.invoice?.paidAt) return false;
     const diasRestantes = p.nfIssueDay - currentDay;
     return diasRestantes > 0 && diasRestantes <= 7;
   });
   const vencidas = pendingInvoices.filter((p) => {
-    if (p.invoice?.sentAt) return false;
+    if (p.invoice?.sentAt && p.invoice?.paidAt) return false;
     return p.nfIssueDay < currentDay;
   });
 
@@ -266,6 +270,7 @@ export default function DashboardPage() {
                 alertType="hoje"
                 onMarkSent={() => handleMarkSent(p.contract.id, p.contract.monthlyValue)}
                 onMarkPaid={() => handleMarkPaid(p.contract.id, p.contract.monthlyValue)}
+                isSent={!!p.invoice?.sentAt}
                 isPaid={!!p.invoice?.paidAt}
               />
             ))}
@@ -277,6 +282,7 @@ export default function DashboardPage() {
                 alertType="proximo"
                 onMarkSent={() => handleMarkSent(p.contract.id, p.contract.monthlyValue)}
                 onMarkPaid={() => handleMarkPaid(p.contract.id, p.contract.monthlyValue)}
+                isSent={!!p.invoice?.sentAt}
                 isPaid={!!p.invoice?.paidAt}
               />
             ))}
@@ -288,6 +294,7 @@ export default function DashboardPage() {
                 alertType="atrasada"
                 onMarkSent={() => handleMarkSent(p.contract.id, p.contract.monthlyValue)}
                 onMarkPaid={() => handleMarkPaid(p.contract.id, p.contract.monthlyValue)}
+                isSent={!!p.invoice?.sentAt}
                 isPaid={!!p.invoice?.paidAt}
               />
             ))}
@@ -625,6 +632,7 @@ function InvoiceAlertRow({
   alertType,
   onMarkSent,
   onMarkPaid,
+  isSent,
   isPaid,
 }: {
   contract: { id: string; title: string; client: { fullName: string }; monthlyValue: number };
@@ -632,6 +640,7 @@ function InvoiceAlertRow({
   alertType: "hoje" | "proximo" | "atrasada";
   onMarkSent: () => void;
   onMarkPaid: () => void;
+  isSent?: boolean;
   isPaid?: boolean;
 }) {
   const config = {
@@ -656,12 +665,16 @@ function InvoiceAlertRow({
         </div>
       </div>
       <div className="flex gap-2 shrink-0">
-        <Button size="sm" variant="outline" className="gap-2" onClick={onMarkSent}>
-          <Send className="w-4 h-4" /> Marcar como Enviada
-        </Button>
-        <Button size="sm" className="gap-2" onClick={onMarkPaid} disabled={isPaid}>
-          <DollarSign className="w-4 h-4" /> {isPaid ? "Paga" : "Marcar como Paga"}
-        </Button>
+        {!isSent && (
+          <Button size="sm" variant="outline" className="gap-2" onClick={onMarkSent}>
+            <Send className="w-4 h-4" /> Marcar como Enviada
+          </Button>
+        )}
+        {!isPaid && (
+          <Button size="sm" className="gap-2" onClick={onMarkPaid}>
+            <DollarSign className="w-4 h-4" /> Marcar como Paga
+          </Button>
+        )}
       </div>
     </div>
   );
