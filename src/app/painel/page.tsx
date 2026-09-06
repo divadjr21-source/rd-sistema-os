@@ -52,6 +52,17 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
   const [currentMonth] = useState(new Date());
+  const [hideValues, setHideValues] = useState(false);
+
+  useEffect(() => {
+    setHideValues(localStorage.getItem("rd_hide_revenue") === "1");
+  }, []);
+
+  const toggleHideValues = () => {
+    const next = !hideValues;
+    setHideValues(next);
+    localStorage.setItem("rd_hide_revenue", next ? "1" : "0");
+  };
 
   useEffect(() => {
     const loadData = async () => {
@@ -261,6 +272,8 @@ export default function DashboardPage() {
           value={formatCurrency(monthlyRevenue)}
           highlight
           maskable
+          hidden={hideValues}
+          onToggleHidden={toggleHideValues}
         />
         <Card icon={Clock} label="Em Andamento" value={orders.filter((o) => ["aprovado", "em_execucao"].includes(o.status)).length.toString()} />
         <Card icon={CheckCircle} label="Finalizados" value={orders.filter((o) => o.status === "finalizado").length.toString()} />
@@ -327,6 +340,13 @@ export default function DashboardPage() {
             <span className="text-xs bg-danger/15 text-danger px-2 py-0.5 rounded-full font-medium">
               {cobrancasPendentes.length}
             </span>
+            <button
+              onClick={toggleHideValues}
+              className="ml-auto text-graphite-500 hover:text-graphite-300 p-1"
+              title={hideValues ? "Mostrar valores" : "Ocultar valores"}
+            >
+              {hideValues ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+            </button>
           </div>
           <p className="text-xs text-graphite-500 mb-4">
             O.S. finalizadas e contratos mensais com pagamento pendente — entre em contato com o cliente.
@@ -347,7 +367,7 @@ export default function DashboardPage() {
                       <p className="text-xs text-graphite-400 truncate">{order.description}</p>
                     </Link>
                     <div className="flex items-center gap-3 flex-shrink-0">
-                      <span className="text-sm font-semibold text-danger">{formatCurrency(total)}</span>
+                      <span className="text-sm font-semibold text-danger">{hideValues ? "R$ ••••••" : formatCurrency(total)}</span>
                       <a
                         href={whatsappLink(
                           order.client.phone,
@@ -378,7 +398,7 @@ export default function DashboardPage() {
                     <p className="text-xs text-graphite-400">Contrato Mensal — aguardando pagamento</p>
                   </Link>
                   <div className="flex items-center gap-3 flex-shrink-0">
-                    <span className="text-sm font-semibold text-danger">{formatCurrency(contract.monthlyValue)}</span>
+                    <span className="text-sm font-semibold text-danger">{hideValues ? "R$ ••••••" : formatCurrency(contract.monthlyValue)}</span>
                     <a
                       href={whatsappLink(
                         contract.client.phone,
@@ -599,26 +619,17 @@ function Card({
   value,
   highlight,
   maskable,
+  hidden,
+  onToggleHidden,
 }: {
   icon: React.ElementType;
   label: string;
   value: string;
   highlight?: boolean;
   maskable?: boolean;
+  hidden?: boolean;
+  onToggleHidden?: () => void;
 }) {
-  const [hidden, setHidden] = useState(false);
-
-  useEffect(() => {
-    if (!maskable) return;
-    setHidden(localStorage.getItem("rd_hide_revenue") === "1");
-  }, [maskable]);
-
-  const toggleHidden = () => {
-    const next = !hidden;
-    setHidden(next);
-    localStorage.setItem("rd_hide_revenue", next ? "1" : "0");
-  };
-
   return (
     <div className="bg-graphite-900 border border-graphite-800 rounded-2xl p-5 shadow-card">
       <div className="flex items-start justify-between">
@@ -627,7 +638,7 @@ function Card({
         </div>
         {maskable && (
           <button
-            onClick={toggleHidden}
+            onClick={onToggleHidden}
             className="text-graphite-500 hover:text-graphite-300 p-1"
             title={hidden ? "Mostrar valor" : "Ocultar valor"}
           >
