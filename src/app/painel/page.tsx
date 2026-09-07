@@ -3,8 +3,8 @@
 import { useEffect, useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { getOrders, getPendingInvoices, markInvoiceAsSent, markInvoiceAsPaid, getAppointments, getActiveContracts, updateContractPaymentStatus } from "@/services/storage";
-import { OrderService, OrderStatus, Contract } from "@/types";
+import { getOrders, getPendingInvoices, markInvoiceAsSent, markInvoiceAsPaid, getAppointments } from "@/services/storage";
+import { OrderService, OrderStatus } from "@/types";
 import { formatCurrency, statusLabels, statusColors, priorityLabels, priorityColors, paymentStatusLabels, paymentStatusColors, toBrazilDateKey, whatsappLink } from "@/lib/utils";
 import {
   ClipboardList,
@@ -40,7 +40,6 @@ const columns: { status: OrderStatus; label: string }[] = [
 export default function DashboardPage() {
   const router = useRouter();
   const [orders, setOrders] = useState<OrderService[]>([]);
-  const [contracts, setContracts] = useState<Contract[]>([]);
   const [pendingInvoices, setPendingInvoices] = useState<
     {
       contract: { id: string; title: string; client: { fullName: string; phone: string }; monthlyValue: number };
@@ -72,15 +71,13 @@ export default function DashboardPage() {
         const month = currentMonth.getMonth() + 1;
         const year = currentMonth.getFullYear();
 
-        const [ordersData, invoicesData, appointmentsData, contractsData] = await Promise.all([
+        const [ordersData, invoicesData, appointmentsData] = await Promise.all([
           getOrders(),
           getPendingInvoices(month, year).catch(() => []),
           getAppointments().catch(() => []),
-          getActiveContracts().catch(() => []),
         ]);
 
         setOrders(ordersData || []);
-        setContracts(contractsData || []);
         setPendingInvoices(
           (invoicesData || []).map((i) => ({
             contract: i.contract,
@@ -153,10 +150,21 @@ export default function DashboardPage() {
   // no card, na tela de Contratos) como "Paga", tirando-o imediatamente
   // da lista de Cobranças Pendentes.
   const handleMarkContractPaid = async (contractId: string) => {
+    const month = currentMonth.getMonth() + 1;
+    const year = currentMonth.getFullYear();
+    const contract = pendingInvoices.find((p) => p.contract.id === contractId)?.contract;
+    if (!contract) return;
     try {
-      await updateContractPaymentStatus(contractId, "paga");
-      setContracts((prev) => prev.map((c) => (c.id === contractId ? { ...c, paymentStatus: "paga" } : c)));
-      toast({ title: "Contrato marcado como pago", variant: "success" });
+      await markInvoiceAsPaid(contractId, month, year, contract.monthlyValue);
+      const updated = await getPendingInvoices(month, year).catch(() => []);
+      setPendingInvoices(
+        (updated || []).map((i) => ({
+          contract: i.contract,
+          invoice: i.invoice,
+          nfIssueDay: i.contract.nfIssueDay,
+        }))
+      );
+      toast({ title: "Pagamento do mês confirmado", variant: "success" });
       router.refresh();
     } catch (error) {
       toastError(error, "Não foi possível marcar o contrato como pago");
@@ -192,11 +200,13 @@ export default function DashboardPage() {
       return { type: "os" as const, id: o.id, order: o, total };
     });
 
-  // Contratos mensais marcados como "Aguardando Pagamento" — simples e
-  // direto, sem depender de data ou mês de referência.
-  const cobrancasPendentesContratos = contracts
-    .filter((c) => c.paymentStatus === "aguardando")
-    .map((c) => ({ type: "contrato" as const, id: c.id, contract: c }));
+  // Contratos ainda não pagos neste mês (fonte única: contract_invoices,
+  // a mesma usada nos Alertas de Notas Fiscais). Não precisa de data de
+  // vencimento — aparece sempre que o mês atual ainda não foi confirmado
+  // como pago, e some sozinho assim que o mês vira (nova linha em branco).
+  const cobrancasPendentesContratos = pendingInvoices
+    .filter((p) => !p.invoice?.paidAt)
+    .map((p) => ({ type: "contrato" as const, id: p.contract.id, contract: p.contract }));
 
   const cobrancasPendentes = [...cobrancasPendentesOS, ...cobrancasPendentesContratos];
 

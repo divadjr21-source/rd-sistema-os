@@ -27,7 +27,9 @@ import {
   updateContract,
   deleteContract,
   createAppointment,
-  updateContractPaymentStatus,
+  getPendingInvoices,
+  markInvoiceAsPaid,
+  clearInvoicePayment,
 } from "@/services/storage";
 import { Contract, Client } from "@/types";
 import { formatCurrency, formatPhone, buildBrazilTimestamp } from "@/lib/utils";
@@ -53,6 +55,13 @@ export default function ContractsPage() {
   const [scheduleTechnician, setScheduleTechnician] = useState("");
   const [scheduling, setScheduling] = useState(false);
 
+  // Status de pagamento do MÊS ATUAL por contrato — fonte única de
+  // verdade (mesma tabela usada nos Alertas de Notas Fiscais).
+  const [paymentByContract, setPaymentByContract] = useState<Record<string, { paidAt?: string }>>({});
+  const now = new Date();
+  const currentMonth = now.getMonth() + 1;
+  const currentYear = now.getFullYear();
+
   const [form, setForm] = useState({
     clientId: "",
     title: "",
@@ -68,11 +77,39 @@ export default function ContractsPage() {
 
   const refresh = async () => {
     try {
-      const [c, cl] = await Promise.all([getContracts(), getClients()]);
+      const [c, cl, invoices] = await Promise.all([
+        getContracts(),
+        getClients(),
+        getPendingInvoices(currentMonth, currentYear).catch(() => []),
+      ]);
       setContracts(c);
       setClients(cl);
+      const map: Record<string, { paidAt?: string }> = {};
+      invoices.forEach((i) => {
+        map[i.contract.id] = { paidAt: i.invoice?.paidAt };
+      });
+      setPaymentByContract(map);
     } catch (error) {
       toastError(error, "Erro ao carregar contratos");
+    }
+  };
+
+  const handleTogglePayment = async (contract: Contract) => {
+    const isPaid = !!paymentByContract[contract.id]?.paidAt;
+    try {
+      if (isPaid) {
+        await clearInvoicePayment(contract.id, currentMonth, currentYear);
+      } else {
+        await markInvoiceAsPaid(contract.id, currentMonth, currentYear, contract.monthlyValue);
+      }
+      await refresh();
+      toast({
+        title: isPaid ? "Pagamento deste mês reaberto" : "Pagamento deste mês confirmado",
+        variant: "success",
+      });
+      router.refresh();
+    } catch (error) {
+      alert(extractErrorMessage(error));
     }
   };
 
@@ -146,21 +183,6 @@ export default function ContractsPage() {
   const confirmDelete = (contract: Contract) => {
     setContractToDelete(contract);
     setDeleteModalOpen(true);
-  };
-
-  const handleTogglePayment = async (contract: Contract) => {
-    const next = contract.paymentStatus === "paga" ? "aguardando" : "paga";
-    try {
-      await updateContractPaymentStatus(contract.id, next);
-      await refresh();
-      toast({
-        title: next === "paga" ? "Contrato marcado como pago" : "Contrato marcado como aguardando pagamento",
-        variant: "success",
-      });
-      router.refresh();
-    } catch (error) {
-      alert(extractErrorMessage(error));
-    }
   };
 
   // Sugere a próxima data com o "Dia de Emissão da NF" do contrato: se o
@@ -415,13 +437,13 @@ export default function ContractsPage() {
                 onClick={() => handleTogglePayment(contract)}
                 className={cn(
                   "mt-3 w-full text-xs px-2.5 py-1.5 rounded-lg border font-medium transition",
-                  contract.paymentStatus === "paga"
+                  paymentByContract[contract.id]?.paidAt
                     ? "bg-emerald-450/10 text-emerald-450 border-emerald-450/30 hover:bg-emerald-450/20"
                     : "bg-warning/10 text-warning border-warning/30 hover:bg-warning/20"
                 )}
-                title="Clique para alternar"
+                title="Clique para alternar (referente ao mês atual)"
               >
-                {contract.paymentStatus === "paga" ? "✓ Paga" : "Aguardando Pagamento"}
+                {paymentByContract[contract.id]?.paidAt ? "✓ Pago este mês" : "Aguardando Pagamento (mês atual)"}
               </button>
             </div>
           ))}
