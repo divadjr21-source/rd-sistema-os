@@ -20,6 +20,7 @@ import {
   UserCog,
   Wallet,
   FileBarChart,
+  DatabaseBackup,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -35,6 +36,7 @@ const nav = [
   { href: "/painel/relatorios", label: "Relatórios", icon: BarChart3, adminOnly: true },
   { href: "/painel/custos", label: "Custos / Projetos", icon: Wallet, adminOnly: true },
   { href: "/painel/relatorios-tecnicos", label: "Relatórios Técnicos", icon: FileBarChart, adminOnly: true },
+  { href: "/painel/backup", label: "Backup", icon: DatabaseBackup, adminOnly: true },
   { href: "/painel/usuarios", label: "Usuários", icon: UserCog, adminOnly: true },
   { href: "/painel/empresa", label: "Empresa", icon: Building2, adminOnly: true },
 ];
@@ -52,6 +54,7 @@ const ADMIN_ONLY_PREFIXES = [
   "/painel/empresa",
   "/painel/custos",
   "/painel/relatorios-tecnicos",
+  "/painel/backup",
   "/painel/contratos",
   "/painel/catalogo",
   "/painel/clientes",
