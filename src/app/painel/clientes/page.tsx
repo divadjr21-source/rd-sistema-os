@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { getClients, createClient, updateClient, deleteClient, getOrders } from "@/services/storage";
+import { getClientsPaginated, createClient, updateClient, deleteClient, getOrders } from "@/services/storage";
 import { Client, OrderService } from "@/types";
 import { formatPhone, formatPhoneInput, statusLabels, statusColors } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
@@ -24,6 +24,9 @@ export default function ClientsPage() {
   const [clients, setClients] = useState<Client[]>([]);
   const [orders, setOrders] = useState<OrderService[]>([]);
   const [search, setSearch] = useState("");
+  const [page, setPage] = useState(1);
+  const [total, setTotal] = useState(0);
+  const pageSize = 20;
   const [modalOpen, setModalOpen] = useState(false);
   const [editModalOpen, setEditModalOpen] = useState(false);
   const [viewModalOpen, setViewModalOpen] = useState(false);
@@ -38,24 +41,39 @@ export default function ClientsPage() {
   });
 
   useEffect(() => {
-    refresh();
+    getOrders().then(setOrders);
   }, []);
 
+  useEffect(() => {
+    refresh();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [page]);
+
+  // Busca no servidor com pequeno atraso (debounce), evita disparar uma
+  // consulta a cada tecla digitada.
+  useEffect(() => {
+    const timeout = setTimeout(() => {
+      if (page !== 1) {
+        setPage(1); // já dispara o refresh acima
+      } else {
+        refresh();
+      }
+    }, 350);
+    return () => clearTimeout(timeout);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [search]);
+
   const refresh = async () => {
-    const [c, o] = await Promise.all([getClients(), getOrders()]);
-    setClients(c);
-    setOrders(o);
+    const { data, total: t } = await getClientsPaginated({ page, pageSize, search });
+    setClients(data);
+    setTotal(t);
   };
 
   const resetForm = () => {
     setForm({ fullName: "", phone: "", address: "" });
   };
 
-  const filtered = clients.filter(
-    (c) =>
-      c.fullName.toLowerCase().includes(search.toLowerCase()) ||
-      c.phone.includes(search)
-  );
+  const filtered = clients;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -260,6 +278,31 @@ export default function ClientsPage() {
             <p className="text-center text-graphite-500 py-8 col-span-full">Nenhum cliente encontrado.</p>
           )}
         </div>
+        {total > pageSize && (
+          <div className="flex items-center justify-between mt-4">
+            <p className="text-xs text-graphite-500">
+              {total} clientes no total — página {page} de {Math.max(1, Math.ceil(total / pageSize))}
+            </p>
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={page <= 1}
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+              >
+                Anterior
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={page >= Math.ceil(total / pageSize)}
+                onClick={() => setPage((p) => p + 1)}
+              >
+                Próxima
+              </Button>
+            </div>
+          </div>
+        )}
       </div>
 
       <Dialog open={editModalOpen} onOpenChange={setEditModalOpen}>

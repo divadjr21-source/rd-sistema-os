@@ -284,6 +284,30 @@ export async function getClients(): Promise<Client[]> {
   return (data || []).map(mapClient);
 }
 
+// Versão paginada, usada na tela de listagem (evita carregar todos os
+// clientes de uma vez quando a base crescer). Busca no servidor por nome
+// ou telefone quando `search` é informado.
+export async function getClientsPaginated(params: {
+  page: number;
+  pageSize: number;
+  search?: string;
+}): Promise<{ data: Client[]; total: number }> {
+  const { page, pageSize, search } = params;
+  const from = (page - 1) * pageSize;
+  const to = from + pageSize - 1;
+
+  let query = supabase.from("clients").select("*", { count: "exact" }).order("created_at", { ascending: false });
+
+  if (search && search.trim()) {
+    const term = search.trim();
+    query = query.or(`full_name.ilike.%${term}%,phone.ilike.%${term.replace(/\D/g, "")}%`);
+  }
+
+  const { data, error, count } = await query.range(from, to);
+  if (error) throw error;
+  return { data: (data || []).map(mapClient), total: count || 0 };
+}
+
 export async function findClientByPhone(phone: string): Promise<Client | undefined> {
   const { data, error } = await supabase
     .from("clients")
@@ -395,6 +419,43 @@ export async function getOrders(): Promise<OrderService[]> {
     .order("created_at", { ascending: false });
   if (error) throw error;
   return (data || []).map(mapOrder);
+}
+
+// Versão paginada, usada na tela de listagem de O.S. (evita carregar
+// centenas de registros de uma vez quando a base crescer). Busca no
+// servidor por número da O.S., nome do cliente ou telefone.
+export async function getOrdersPaginated(params: {
+  page: number;
+  pageSize: number;
+  search?: string;
+}): Promise<{ data: OrderService[]; total: number }> {
+  const { page, pageSize, search } = params;
+  const from = (page - 1) * pageSize;
+  const to = from + pageSize - 1;
+
+  let query = supabase
+    .from("orders")
+    .select(
+      `
+      *,
+      clients!inner(*),
+      order_media(*),
+      budget_items(*)
+    `,
+      { count: "exact" }
+    )
+    .order("created_at", { ascending: false });
+
+  if (search && search.trim()) {
+    const term = search.trim();
+    query = query.or(
+      `number.ilike.%${term}%,clients.full_name.ilike.%${term}%,clients.phone.ilike.%${term.replace(/\D/g, "")}%`
+    );
+  }
+
+  const { data, error, count } = await query.range(from, to);
+  if (error) throw error;
+  return { data: (data || []).map(mapOrder), total: count || 0 };
 }
 
 export async function getOrdersByMonth(year: number, month: number): Promise<OrderService[]> {

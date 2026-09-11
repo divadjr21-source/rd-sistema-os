@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { getOrders, getClients, createOrderManual, deleteOrder, uploadMediaFiles, getMyProfile, MyProfile } from "@/services/storage";
+import { getOrdersPaginated, getClients, createOrderManual, deleteOrder, uploadMediaFiles, getMyProfile, MyProfile } from "@/services/storage";
 import { OrderService, Client, OrderStatus, OrderPriority, PaymentStatus } from "@/types";
 import {
   formatPhone,
@@ -92,6 +92,9 @@ export default function OrdersListPage() {
   const [profile, setProfile] = useState<MyProfile | null>(null);
   const isAdmin = profile?.role === "admin";
   const [search, setSearch] = useState("");
+  const [page, setPage] = useState(1);
+  const [total, setTotal] = useState(0);
+  const pageSize = 20;
   const [modalOpen, setModalOpen] = useState(false);
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [orderToDelete, setOrderToDelete] = useState<OrderService | null>(null);
@@ -128,14 +131,37 @@ export default function OrdersListPage() {
   const [editScheduleTechnician, setEditScheduleTechnician] = useState("");
 
   useEffect(() => {
-    refresh();
     getMyProfile().then(setProfile);
+    getClients().then(setClients);
   }, []);
 
+  useEffect(() => {
+    refresh();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [page]);
+
+  // Busca no servidor com um pequeno atraso (debounce) pra não disparar
+  // uma consulta a cada tecla digitada.
+  useEffect(() => {
+    const timeout = setTimeout(() => {
+      if (page !== 1) {
+        setPage(1); // volta pra página 1 a cada nova busca; isso já dispara o refresh acima
+      } else {
+        refresh();
+      }
+    }, 350);
+    return () => clearTimeout(timeout);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [search]);
+
   const refresh = async () => {
-    const [o, c] = await Promise.all([getOrders(), getClients()]);
-    setOrders(o);
-    setClients(c);
+    try {
+      const { data, total: t } = await getOrdersPaginated({ page, pageSize, search });
+      setOrders(data);
+      setTotal(t);
+    } catch (error) {
+      alert(extractErrorMessage(error));
+    }
   };
 
   const resetForm = () => {
@@ -209,11 +235,7 @@ export default function OrdersListPage() {
     }
   };
 
-  const filtered = orders.filter((o) =>
-    o.client.fullName.toLowerCase().includes(search.toLowerCase()) ||
-    o.client.phone.includes(search) ||
-    o.number.includes(search)
-  );
+  const filtered = orders;
 
   const handleFile = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files) return;
@@ -658,6 +680,31 @@ export default function OrdersListPage() {
             </tbody>
           </table>
         </div>
+        {total > pageSize && (
+          <div className="flex items-center justify-between mt-4 px-1">
+            <p className="text-xs text-graphite-500">
+              {total} O.S. no total — página {page} de {Math.max(1, Math.ceil(total / pageSize))}
+            </p>
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={page <= 1}
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+              >
+                Anterior
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={page >= Math.ceil(total / pageSize)}
+                onClick={() => setPage((p) => p + 1)}
+              >
+                Próxima
+              </Button>
+            </div>
+          </div>
+        )}
       </div>
 
       <Dialog open={deleteModalOpen && isAdmin} onOpenChange={setDeleteModalOpen}>
