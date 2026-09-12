@@ -566,7 +566,20 @@ export default function DashboardPage() {
             {columns.map((col) => {
               // As O.S. já pagas somem do quadro para não poluir o dia a
               // dia — ficam disponíveis em Relatórios (card "O.S. Pagas").
-              const items = orders.filter((o) => o.status === col.status && o.paymentStatus !== "paga");
+              // O.S. finalizadas há mais de 3 dias também saem do quadro
+              // pelo mesmo motivo — continuam existindo normalmente,
+              // consultáveis em Relatórios (card "O.S. Finalizadas").
+              const threeDaysAgo = new Date();
+              threeDaysAgo.setDate(threeDaysAgo.getDate() - 3);
+              const items = orders.filter((o) => {
+                if (o.status !== col.status) return false;
+                if (o.paymentStatus === "paga") return false;
+                if (col.status === "finalizado") {
+                  const reference = new Date(o.updatedAt || o.createdAt);
+                  if (reference < threeDaysAgo) return false;
+                }
+                return true;
+              });
               const visibleCount = expandedColumns[col.status] || kanbanPageSize;
               const visibleItems = items.slice(0, visibleCount);
               const remaining = items.length - visibleItems.length;

@@ -38,6 +38,7 @@ export interface OrderService {
   paymentStatus: PaymentStatus;
   media: MediaFile[];
   createdAt: string;
+  updatedAt?: string;
   budgetItems?: BudgetItem[];
   budgetStatus?: BudgetStatus;
   budgetApprovedAt?: string;

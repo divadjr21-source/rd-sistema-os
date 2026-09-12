@@ -47,6 +47,7 @@ type DbOrder = {
   budget_rejection_reason: string | null;
   assigned_technician_id: string | null;
   created_at: string;
+  updated_at: string | null;
   clients: DbClient | null;
   order_media: { id: string; url: string; type: "image" | "video"; name: string }[] | null;
   budget_items: DbBudgetItem[] | null;
@@ -173,6 +174,7 @@ function mapOrder(row: DbOrder): OrderService {
       name: m.name,
     })),
     createdAt: row.created_at,
+    updatedAt: row.updated_at || undefined,
     budgetItems: (row.budget_items || []).map(mapBudgetItem),
     budgetStatus: row.budget_status || "pendente",
     budgetApprovedAt: row.budget_approved_at || undefined,
