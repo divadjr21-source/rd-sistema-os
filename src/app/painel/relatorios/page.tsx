@@ -132,8 +132,27 @@ export default function RelatoriosPage() {
   const cancelados = useMemo(() => orders.filter((o) => o.status === "recusado"), [orders]);
   const pagas = useMemo(() => orders.filter((o) => o.paymentStatus === "paga"), [orders]);
 
-  const [showOnlyPaid, setShowOnlyPaid] = useState(false);
-  const displayedOrders = showOnlyPaid ? pagas : orders;
+  const [filterMode, setFilterMode] = useState<"all" | "finalizadas" | "aberto" | "canceladas" | "pagas">("all");
+  const displayedOrders = useMemo(() => {
+    switch (filterMode) {
+      case "finalizadas":
+        return finalizados;
+      case "aberto":
+        return emAberto;
+      case "canceladas":
+        return cancelados;
+      case "pagas":
+        return pagas;
+      default:
+        return orders;
+    }
+  }, [filterMode, orders, finalizados, emAberto, cancelados, pagas]);
+  const filterLabels: Record<string, string> = {
+    finalizadas: "Mostrando só O.S. Finalizadas",
+    aberto: "Mostrando só O.S. em Aberto",
+    canceladas: "Mostrando só O.S. Canceladas/Recusadas",
+    pagas: "Mostrando só O.S. Pagas",
+  };
 
   const faturamentoOS = useMemo(
     () =>
@@ -210,32 +229,40 @@ export default function RelatoriosPage() {
               label="Total de O.S."
               value={orders.length.toString()}
               color="text-info"
+              onClick={() => setFilterMode("all")}
+              active={filterMode === "all"}
             />
             <Card
               icon={CheckCircle}
               label="O.S. Finalizadas"
               value={finalizados.length.toString()}
               color="text-emerald-450"
+              onClick={() => setFilterMode((m) => (m === "finalizadas" ? "all" : "finalizadas"))}
+              active={filterMode === "finalizadas"}
             />
             <Card
               icon={ClipboardList}
               label="O.S. em Aberto"
               value={emAberto.length.toString()}
               color="text-warning"
+              onClick={() => setFilterMode((m) => (m === "aberto" ? "all" : "aberto"))}
+              active={filterMode === "aberto"}
             />
             <Card
               icon={XCircle}
               label="O.S. Canceladas/Recusadas"
               value={cancelados.length.toString()}
               color="text-danger"
+              onClick={() => setFilterMode((m) => (m === "canceladas" ? "all" : "canceladas"))}
+              active={filterMode === "canceladas"}
             />
             <Card
               icon={Wallet}
               label="O.S. Pagas"
               value={pagas.length.toString()}
               color="text-emerald-450"
-              onClick={() => setShowOnlyPaid((v) => !v)}
-              active={showOnlyPaid}
+              onClick={() => setFilterMode((m) => (m === "pagas" ? "all" : "pagas"))}
+              active={filterMode === "pagas"}
             />
           </div>
 
@@ -275,18 +302,18 @@ export default function RelatoriosPage() {
           <div className="bg-graphite-900 border border-graphite-800 rounded-2xl p-6 shadow-card">
             <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
               <h2 className="text-lg font-semibold">Detalhamento das O.S.</h2>
-              {showOnlyPaid && (
+              {filterMode !== "all" && (
                 <button
-                  onClick={() => setShowOnlyPaid(false)}
+                  onClick={() => setFilterMode("all")}
                   className="text-xs bg-emerald-450/15 text-emerald-450 px-3 py-1.5 rounded-full font-medium flex items-center gap-1.5 print:hidden"
                 >
-                  Mostrando só O.S. Pagas <X className="w-3 h-3" />
+                  {filterLabels[filterMode]} <X className="w-3 h-3" />
                 </button>
               )}
             </div>
             {displayedOrders.length === 0 ? (
               <p className="text-graphite-500 text-center py-8">
-                {showOnlyPaid ? "Nenhuma O.S. paga neste período." : "Nenhuma O.S. encontrada no período."}
+                {filterMode === "all" ? "Nenhuma O.S. encontrada no período." : "Nenhuma O.S. nesse filtro."}
               </p>
             ) : (
               <div className="overflow-x-auto">
