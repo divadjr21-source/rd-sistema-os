@@ -1,0 +1,666 @@
+"use client";
+
+import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+  DialogDescription,
+} from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { getAppointments, getOrders, createAppointment, updateAppointment, deleteAppointment } from "@/services/storage";
+import { Appointment, OrderService, AppointmentStatus } from "@/types";
+import { formatPhone, toBrazilDateKey, toBrazilTimeHM, buildBrazilTimestamp } from "@/lib/utils";
+import { toast, toastError } from "@/hooks/use-toast";
+import { format, isSameMonth, isSameDay, addMonths, subMonths, getDay } from "date-fns";
+import { ptBR } from "date-fns/locale";
+import {
+  ChevronLeft,
+  ChevronRight,
+  Calendar,
+  Clock,
+  User,
+  MapPin,
+  Phone,
+  Plus,
+  Pencil,
+  Trash2,
+  FileText,
+  AlertTriangle,
+  List,
+  CalendarDays,
+} from "lucide-react";
+import { cn } from "@/lib/utils";
+
+const appointmentStatusLabels: Record<AppointmentStatus, string> = {
+  agendado: "Agendado",
+  em_andamento: "Em Andamento",
+  concluido: "Concluído",
+  cancelado: "Cancelado",
+};
+
+const appointmentStatusColors: Record<AppointmentStatus, string> = {
+  agendado: "bg-info/10 text-info border-info/30",
+  em_andamento: "bg-warning/10 text-warning border-warning/30",
+  concluido: "bg-emerald-450/10 text-emerald-450 border-emerald-450/30",
+  cancelado: "bg-danger/10 text-danger border-danger/30",
+};
+
+const WEEK_DAYS = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
+
+function toLocalNoon(date: Date) {
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate(), 12, 0, 0);
+}
+
+function parseLocalNoon(dateString: string) {
+  const [year, month, day] = dateString.split("T")[0].split("-").map(Number);
+  return new Date(year, month - 1, day, 12, 0, 0);
+}
+
+function localDateKey(date: Date) {
+  const d = toLocalNoon(date);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+export default function AgendaPage() {
+  const router = useRouter();
+  const [currentDate, setCurrentDate] = useState(() => toLocalNoon(new Date()));
+  const [appointments, setAppointments] = useState<Appointment[]>([]);
+  const [orders, setOrders] = useState<OrderService[]>([]);
+  const [selectedDate, setSelectedDate] = useState<Date | null>(() => toLocalNoon(new Date()));
+  const [modalOpen, setModalOpen] = useState(false);
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [appointmentToDelete, setAppointmentToDelete] = useState<Appointment | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [viewMode, setViewMode] = useState<"calendar" | "list">("calendar");
+
+  const [form, setForm] = useState({
+    orderId: "",
+    clientId: "",
+    title: "",
+    scheduledDate: "",
+    scheduledTime: "",
+    technician: "",
+    notes: "",
+    status: "agendado" as AppointmentStatus,
+  });
+
+  const selectedOrder = useMemo(
+    () => orders.find((o) => o.id === form.orderId),
+    [orders, form.orderId]
+  );
+
+  const year = currentDate.getFullYear();
+  const month = currentDate.getMonth();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+
+  const firstWeekday = useMemo(() => getDay(new Date(year, month, 1, 12, 0, 0)), [year, month]);
+
+  const days = useMemo(() => {
+    const list: Date[] = [];
+    for (let d = 1; d <= daysInMonth; d++) {
+      list.push(new Date(year, month, d, 12, 0, 0));
+    }
+    return list;
+  }, [year, month, daysInMonth]);
+
+  const appointmentsByDate = useMemo(() => {
+    const map = new Map<string, Appointment[]>();
+    for (const a of appointments) {
+      if (!a.scheduledAt) continue;
+      // Sempre converte para o dia no fuso do Brasil antes de agrupar,
+      // independente de como o timestamp foi retornado pelo Supabase.
+      const key = toBrazilDateKey(a.scheduledAt);
+      const existing = map.get(key) || [];
+      existing.push(a);
+      map.set(key, existing);
+    }
+    return map;
+  }, [appointments]);
+
+  const monthRangeKey = useMemo(() => `${year}-${String(month + 1).padStart(2, "0")}`, [year, month]);
+
+  useEffect(() => {
+    refresh();
+  }, [monthRangeKey]);
+
+  const refresh = async () => {
+    // Usa o fuso do Brasil explicitamente e cobre o último dia do mês por
+    // inteiro (até 23:59:59), não só até a meia-noite — senão qualquer
+    // compromisso marcado para o próprio último dia do mês "desaparecia"
+    // da Agenda mesmo continuando a existir no banco.
+    const lastDay = String(daysInMonth).padStart(2, "0");
+    const start = buildBrazilTimestamp(`${year}-${String(month + 1).padStart(2, "0")}-01`, "00:00");
+    const end = `${year}-${String(month + 1).padStart(2, "0")}-${lastDay}T23:59:59-03:00`;
+    const [a, o] = await Promise.all([getAppointments(start, end), getOrders()]);
+    setAppointments(a);
+    setOrders(o);
+  };
+
+  const resetForm = () => {
+    setForm({
+      orderId: "",
+      clientId: "",
+      title: "",
+      scheduledDate: "",
+      scheduledTime: "",
+      technician: "",
+      notes: "",
+      status: "agendado",
+    });
+    setEditingId(null);
+  };
+
+  const openNew = (date?: Date) => {
+    resetForm();
+    if (date) {
+      const localDate = toLocalNoon(date);
+      setForm((prev) => ({ ...prev, scheduledDate: localDateKey(localDate) }));
+      setSelectedDate(localDate);
+    }
+    setModalOpen(true);
+  };
+
+  const openEdit = (appointment: Appointment) => {
+    setEditingId(appointment.id);
+    const localDate = appointment.scheduledAt
+      ? parseLocalNoon(toBrazilDateKey(appointment.scheduledAt))
+      : new Date();
+    const time = appointment.scheduledAt ? toBrazilTimeHM(appointment.scheduledAt) : "";
+    setForm({
+      orderId: appointment.orderId || "",
+      clientId: appointment.clientId || appointment.order?.clientId || "",
+      title: appointment.title,
+      scheduledDate: localDateKey(localDate),
+      scheduledTime: time,
+      technician: appointment.technician,
+      notes: appointment.notes || "",
+      status: appointment.status,
+    });
+    setModalOpen(true);
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!form.title || !form.scheduledDate || !form.technician || submitting) return;
+
+    setSubmitting(true);
+    try {
+      // Sempre grava com o offset -03:00 explícito, para não depender do
+      // fuso horário configurado na sessão do banco (isso é o que causava
+      // o agendamento aparecer no dia errado do calendário).
+      const scheduledAt = buildBrazilTimestamp(form.scheduledDate, form.scheduledTime);
+
+      const orderId = form.orderId || null;
+      const clientId = form.clientId || selectedOrder?.clientId || null;
+
+      const payload = {
+        orderId,
+        clientId,
+        title: form.title,
+        scheduledAt,
+        technician: form.technician,
+        notes: form.notes || undefined,
+      };
+
+      if (editingId) {
+        await updateAppointment(editingId, { ...payload, status: form.status });
+      } else {
+        await createAppointment(payload);
+      }
+      await refresh();
+      setModalOpen(false);
+      resetForm();
+      toast({ title: editingId ? "Agendamento atualizado" : "Agendamento criado", variant: "success" });
+      router.refresh();
+    } catch (error: unknown) {
+      toastError(error, "Não foi possível salvar o agendamento");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const confirmDelete = (appointment: Appointment) => {
+    setAppointmentToDelete(appointment);
+    setDeleteModalOpen(true);
+  };
+
+  const handleDelete = async () => {
+    if (!appointmentToDelete) return;
+    try {
+      await deleteAppointment(appointmentToDelete.id);
+      await refresh();
+      setDeleteModalOpen(false);
+      setAppointmentToDelete(null);
+      toast({ title: "Agendamento excluído", variant: "success" });
+      // Invalida o cache de navegação do Next.js para que outras telas
+      // (ex: Dashboard) busquem os dados atualizados na próxima visita,
+      // em vez de mostrar a versão antiga guardada em cache por até 30s.
+      router.refresh();
+    } catch (error) {
+      toastError(error, "Não foi possível excluir o agendamento");
+    }
+  };
+
+  const getAppointmentsForDay = (day: Date) => appointmentsByDate.get(localDateKey(day)) || [];
+
+  const selectedDateAppointments = selectedDate ? getAppointmentsForDay(selectedDate) : [];
+
+  return (
+    <div className="space-y-6">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold">Agenda de Visitas Técnicas</h1>
+          <p className="text-graphite-400">Calendário de agendamentos e visitas técnicas</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <Button
+            type="button"
+            variant={viewMode === "calendar" ? "default" : "outline"}
+            size="sm"
+            onClick={() => setViewMode("calendar")}
+            className="gap-2"
+          >
+            <CalendarDays className="w-4 h-4" /> Calendário
+          </Button>
+          <Button
+            type="button"
+            variant={viewMode === "list" ? "default" : "outline"}
+            size="sm"
+            onClick={() => setViewMode("list")}
+            className="gap-2"
+          >
+            <List className="w-4 h-4" /> Lista
+          </Button>
+          <Button type="button" className="gap-2" size="sm" onClick={() => openNew()}>
+            <Plus className="w-4 h-4" /> Agendar
+          </Button>
+        </div>
+      </div>
+
+      {viewMode === "calendar" ? (
+        <div className="grid lg:grid-cols-3 gap-6">
+          <div className="lg:col-span-2 bg-graphite-900 border border-graphite-800 rounded-2xl p-5 shadow-card">
+            <div className="flex items-center justify-between mb-5">
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                onClick={() => setCurrentDate(toLocalNoon(subMonths(currentDate, 1)))}
+              >
+                <ChevronLeft className="w-5 h-5" />
+              </Button>
+              <h2 className="text-lg font-semibold capitalize">
+                {format(currentDate, "MMMM yyyy", { locale: ptBR })}
+              </h2>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                onClick={() => setCurrentDate(toLocalNoon(addMonths(currentDate, 1)))}
+              >
+                <ChevronRight className="w-5 h-5" />
+              </Button>
+            </div>
+
+            <div className="grid grid-cols-7 gap-1 text-center text-sm text-graphite-400 mb-2">
+              {WEEK_DAYS.map((d) => (
+                <div key={d} className="py-2 font-medium">
+                  {d}
+                </div>
+              ))}
+            </div>
+
+            <div className="grid grid-cols-7 gap-1">
+              {Array.from({ length: firstWeekday }).map((_, i) => (
+                <div key={`empty-${i}`} className="min-h-[100px]" />
+              ))}
+              {days.map((day) => {
+                const dayAppointments = getAppointmentsForDay(day);
+                const isSelected = selectedDate ? isSameDay(day, selectedDate) : false;
+                return (
+                  <button
+                    key={localDateKey(day)}
+                    type="button"
+                    onClick={() => {
+                      setSelectedDate(day);
+                      if (dayAppointments.length === 0) openNew(day);
+                    }}
+                    className={cn(
+                      "min-h-[100px] p-2 rounded-xl border text-left transition flex flex-col gap-1",
+                      !isSameMonth(day, currentDate) && "opacity-40",
+                      isSelected
+                        ? "border-emerald-450 bg-emerald-450/10"
+                        : "border-graphite-800 bg-graphite-950 hover:border-graphite-700"
+                    )}
+                  >
+                    <span
+                      className={cn(
+                        "text-sm font-medium",
+                        isSelected && "text-emerald-450"
+                      )}
+                    >
+                      {format(day, "d")}
+                    </span>
+                    {dayAppointments.slice(0, 2).map((a) => (
+                      <div
+                        key={a.id}
+                        className={cn(
+                          "text-[10px] px-1.5 py-0.5 rounded truncate",
+                          appointmentStatusColors[a.status]
+                        )}
+                      >
+                        {a.scheduledAt ? toBrazilTimeHM(a.scheduledAt) : ""} {a.title}
+                      </div>
+                    ))}
+                    {dayAppointments.length > 2 && (
+                      <span className="text-[10px] text-graphite-500">+{dayAppointments.length - 2} mais</span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="bg-graphite-900 border border-graphite-800 rounded-2xl p-5 shadow-card">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-semibold">
+                {selectedDate ? (
+                  <>
+                    Visitas de {" "}
+                    <span className="text-emerald-450">{format(selectedDate, "dd/MM/yyyy")}</span>
+                  </>
+                ) : (
+                  "Selecione um dia"
+                )}
+              </h3>
+              {selectedDate && (
+                <Button type="button" size="sm" variant="outline" onClick={() => openNew(selectedDate)}>
+                  + Agendar
+                </Button>
+              )}
+            </div>
+
+            <div className="space-y-3">
+              {selectedDateAppointments.length === 0 ? (
+                <p className="text-sm text-graphite-500 text-center py-8">
+                  Nenhuma visita agendada para este dia.
+                </p>
+              ) : (
+                selectedDateAppointments.map((a) => (
+                  <AppointmentRow
+                    key={a.id}
+                    appointment={a}
+                    onEdit={openEdit}
+                    onDelete={confirmDelete}
+                  />
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+      ) : (
+        <div className="bg-graphite-900 border border-graphite-800 rounded-2xl p-5 shadow-card">
+          <div className="space-y-3">
+            {appointments.length === 0 && (
+              <p className="text-center text-graphite-500 py-8">Nenhum agendamento encontrado.</p>
+            )}
+            {appointments.map((a) => (
+              <AppointmentRow
+                key={a.id}
+                appointment={a}
+                onEdit={openEdit}
+                onDelete={confirmDelete}
+              />
+            ))}
+          </div>
+        </div>
+      )}
+
+      <Dialog open={modalOpen} onOpenChange={setModalOpen}>
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>{editingId ? "Editar Agendamento" : "Novo Agendamento"}</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleSubmit} className="space-y-4 mt-2">
+            <div className="space-y-1.5">
+              <Label>Vincular a O.S. (opcional)</Label>
+              <Select
+                value={form.orderId}
+                onValueChange={(v) => {
+                  const order = orders.find((o) => o.id === v);
+                  setForm({ ...form, orderId: v, clientId: order ? order.clientId : "" });
+                }}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecione uma O.S." />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">Nenhuma</SelectItem>
+                  {orders.map((o) => (
+                    <SelectItem key={o.id} value={o.id}>
+                      #{o.number} - {o.client.fullName}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="title">Título da Visita</Label>
+              <Input
+                id="title"
+                value={form.title}
+                onChange={(e) => setForm({ ...form, title: e.target.value })}
+                placeholder="Ex: Instalação de câmeras"
+                required
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <Label htmlFor="scheduledDate">Data</Label>
+                <Input
+                  id="scheduledDate"
+                  type="date"
+                  value={form.scheduledDate}
+                  onChange={(e) => setForm({ ...form, scheduledDate: e.target.value })}
+                  required
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="scheduledTime">Horário</Label>
+                <Input
+                  id="scheduledTime"
+                  type="time"
+                  value={form.scheduledTime}
+                  onChange={(e) => setForm({ ...form, scheduledTime: e.target.value })}
+                />
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="technician">Técnico Responsável</Label>
+              <Input
+                id="technician"
+                value={form.technician}
+                onChange={(e) => setForm({ ...form, technician: e.target.value })}
+                placeholder="Nome do técnico"
+                required
+              />
+            </div>
+
+            {editingId && (
+              <div className="space-y-1.5">
+                <Label>Status</Label>
+                <Select
+                  value={form.status}
+                  onValueChange={(v) => setForm({ ...form, status: v as AppointmentStatus })}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {(Object.keys(appointmentStatusLabels) as AppointmentStatus[]).map((s) => (
+                      <SelectItem key={s} value={s}>{appointmentStatusLabels[s]}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+
+            <div className="space-y-1.5">
+              <Label htmlFor="notes">Observações</Label>
+              <Input
+                id="notes"
+                value={form.notes}
+                onChange={(e) => setForm({ ...form, notes: e.target.value })}
+                placeholder="Instruções ou detalhes"
+              />
+            </div>
+
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  setModalOpen(false);
+                  resetForm();
+                }}
+              >
+                Cancelar
+              </Button>
+              <Button type="submit" disabled={submitting}>
+                {submitting ? "Salvando..." : "Salvar Agendamento"}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={deleteModalOpen} onOpenChange={setDeleteModalOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="w-5 h-5 text-danger" /> Excluir Agendamento
+            </DialogTitle>
+            <DialogDescription>
+              Tem certeza que deseja excluir o agendamento{" "}
+              <strong>{appointmentToDelete?.title}</strong>?
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="mt-4">
+            <Button type="button" variant="outline" onClick={() => setDeleteModalOpen(false)}>
+              Cancelar
+            </Button>
+            <Button type="button" variant="destructive" onClick={handleDelete}>
+              Excluir
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
+
+function AppointmentRow({
+  appointment,
+  onEdit,
+  onDelete,
+}: {
+  appointment: Appointment;
+  onEdit: (a: Appointment) => void;
+  onDelete: (a: Appointment) => void;
+}) {
+  const dateLabel = useMemo(() => {
+    if (!appointment.scheduledAt) return "";
+    const local = parseLocalNoon(toBrazilDateKey(appointment.scheduledAt));
+    return format(local, "dd/MM/yyyy");
+  }, [appointment.scheduledAt]);
+
+  const timeLabel = useMemo(() => {
+    if (!appointment.scheduledAt) return "";
+    return toBrazilTimeHM(appointment.scheduledAt);
+  }, [appointment.scheduledAt]);
+
+  return (
+    <div className="bg-graphite-950 border border-graphite-800 rounded-xl p-4 flex items-start justify-between gap-3">
+      <div className="space-y-1 min-w-0">
+        <div className="flex items-center gap-2 flex-wrap">
+          <span
+            className={cn(
+              "text-xs px-2 py-0.5 rounded-full border",
+              appointmentStatusColors[appointment.status]
+            )}
+          >
+            {appointmentStatusLabels[appointment.status]}
+          </span>
+          <p className="font-medium truncate">{appointment.title}</p>
+        </div>
+        <div className="flex flex-wrap gap-3 text-sm text-graphite-400">
+          <span className="flex items-center gap-1">
+            <Calendar className="w-3.5 h-3.5 text-emerald-450" /> {dateLabel}
+          </span>
+          {timeLabel && (
+            <span className="flex items-center gap-1">
+              <Clock className="w-3.5 h-3.5 text-emerald-450" /> {timeLabel}
+            </span>
+          )}
+          <span className="flex items-center gap-1">
+            <User className="w-3.5 h-3.5 text-emerald-450" /> {appointment.technician}
+          </span>
+        </div>
+        {appointment.order && (
+          <div className="mt-2 pt-2 border-t border-graphite-800 text-sm">
+            <Link href={`/painel/os/${appointment.order.id}`} className="text-emerald-450 hover:underline">
+              O.S. #{appointment.order.number} - {appointment.order.client.fullName}
+            </Link>
+            <div className="flex flex-wrap gap-2 text-graphite-400 mt-1">
+              <span className="flex items-center gap-1">
+                <Phone className="w-3.5 h-3.5" /> {formatPhone(appointment.order.client.phone)}
+              </span>
+              <span className="flex items-center gap-1">
+                <MapPin className="w-3.5 h-3.5" /> {appointment.order.client.address}
+              </span>
+            </div>
+          </div>
+        )}
+        {appointment.notes && (
+          <p className="text-xs text-graphite-500 mt-2 flex items-start gap-1">
+            <FileText className="w-3.5 h-3.5 mt-0.5" /> {appointment.notes}
+          </p>
+        )}
+      </div>
+      <div className="flex gap-1 shrink-0">
+        <button
+          type="button"
+          onClick={() => onEdit(appointment)}
+          className="p-2 text-graphite-400 hover:text-emerald-450"
+        >
+          <Pencil className="w-4 h-4" />
+        </button>
+        <button
+          type="button"
+          onClick={() => onDelete(appointment)}
+          className="p-2 text-graphite-400 hover:text-danger"
+        >
+          <Trash2 className="w-4 h-4" />
+        </button>
+      </div>
+    </div>
+  );
+}
