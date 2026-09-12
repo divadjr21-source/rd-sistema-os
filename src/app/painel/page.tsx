@@ -52,6 +52,10 @@ export default function DashboardPage() {
   const [loadError, setLoadError] = useState(false);
   const [currentMonth] = useState(new Date());
   const [hideValues, setHideValues] = useState(false);
+  // Quantos cards mostrar por coluna do quadro de O.S. antes de precisar
+  // clicar em "Ver mais" — evita uma coluna gigante quando tiver muita O.S.
+  const kanbanPageSize = 5;
+  const [expandedColumns, setExpandedColumns] = useState<Record<string, number>>({});
 
   useEffect(() => {
     setHideValues(localStorage.getItem("rd_hide_revenue") === "1");
@@ -563,6 +567,9 @@ export default function DashboardPage() {
               // As O.S. já pagas somem do quadro para não poluir o dia a
               // dia — ficam disponíveis em Relatórios (card "O.S. Pagas").
               const items = orders.filter((o) => o.status === col.status && o.paymentStatus !== "paga");
+              const visibleCount = expandedColumns[col.status] || kanbanPageSize;
+              const visibleItems = items.slice(0, visibleCount);
+              const remaining = items.length - visibleItems.length;
               return (
                 <div key={col.status} className="flex-1 min-w-[180px]">
                   <div className="flex items-center justify-between mb-3">
@@ -570,7 +577,7 @@ export default function DashboardPage() {
                     <span className="text-xs bg-graphite-800 px-2 py-0.5 rounded-full">{items.length}</span>
                   </div>
                   <div className="space-y-3">
-                    {items.map((order) => (
+                    {visibleItems.map((order) => (
                       <Link key={order.id} href={`/painel/os/${order.id}`}>
                         <div className="bg-graphite-950 border border-graphite-800 rounded-xl p-3 hover:border-emerald-450/40 transition group">
                           <div className="flex items-center justify-between mb-2">
@@ -611,6 +618,26 @@ export default function DashboardPage() {
                     ))}
                     {items.length === 0 && (
                       <div className="text-center py-6 text-graphite-500 text-sm">Nenhuma O.S.</div>
+                    )}
+                    {remaining > 0 && (
+                      <button
+                        onClick={() =>
+                          setExpandedColumns((prev) => ({ ...prev, [col.status]: visibleCount + 10 }))
+                        }
+                        className="w-full text-center text-xs text-emerald-450 hover:underline py-2"
+                      >
+                        Ver mais ({remaining} restante{remaining > 1 ? "s" : ""})
+                      </button>
+                    )}
+                    {visibleCount > kanbanPageSize && remaining === 0 && (
+                      <button
+                        onClick={() =>
+                          setExpandedColumns((prev) => ({ ...prev, [col.status]: kanbanPageSize }))
+                        }
+                        className="w-full text-center text-xs text-graphite-500 hover:underline py-2"
+                      >
+                        Ver menos
+                      </button>
                     )}
                   </div>
                 </div>
