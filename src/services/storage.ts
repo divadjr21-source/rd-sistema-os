@@ -406,7 +406,22 @@ export async function deleteCatalogItem(id: string): Promise<void> {
 }
 
 // --- Orders ---
-
+// Data exata em que cada O.S. virou "Finalizado" pela última vez — usa o
+// histórico de mudança de status (mais confiável que "última edição",
+// que muda por qualquer motivo, não só ao finalizar).
+export async function getOrderFinalizedDates(): Promise<Record<string, string>> {
+  const { data, error } = await supabase
+    .from("order_status_history")
+    .select("order_id, created_at")
+    .eq("status", "finalizado")
+    .order("created_at", { ascending: false });
+  if (error) throw error;
+  const map: Record<string, string> = {};
+  (data || []).forEach((row) => {
+    if (!map[row.order_id]) map[row.order_id] = row.created_at;
+  });
+  return map;
+}
 export async function getOrders(): Promise<OrderService[]> {
   const { data, error } = await supabase
     .from("orders")
