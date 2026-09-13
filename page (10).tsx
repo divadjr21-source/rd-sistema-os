@@ -3,7 +3,7 @@
 import { useEffect, useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { getOrders, getPendingInvoices, markInvoiceAsSent, markInvoiceAsPaid, getAppointments } from "@/services/storage";
+import { getOrders, getPendingInvoices, markInvoiceAsSent, markInvoiceAsPaid, getAppointments, getOrderFinalizedDates } from "@/services/storage";
 import { OrderService, OrderStatus } from "@/types";
 import { formatCurrency, statusLabels, statusColors, priorityLabels, priorityColors, paymentStatusLabels, paymentStatusColors, toBrazilDateKey, whatsappLink } from "@/lib/utils";
 import {
@@ -40,6 +40,7 @@ const columns: { status: OrderStatus; label: string }[] = [
 export default function DashboardPage() {
   const router = useRouter();
   const [orders, setOrders] = useState<OrderService[]>([]);
+  const [finalizedDates, setFinalizedDates] = useState<Record<string, string>>({});
   const [pendingInvoices, setPendingInvoices] = useState<
     {
       contract: { id: string; title: string; client: { fullName: string; phone: string }; monthlyValue: number };
@@ -75,13 +76,15 @@ export default function DashboardPage() {
         const month = currentMonth.getMonth() + 1;
         const year = currentMonth.getFullYear();
 
-        const [ordersData, invoicesData, appointmentsData] = await Promise.all([
+        const [ordersData, invoicesData, appointmentsData, finalizedDatesData] = await Promise.all([
           getOrders(),
           getPendingInvoices(month, year).catch(() => []),
           getAppointments().catch(() => []),
+          getOrderFinalizedDates().catch(() => ({})),
         ]);
 
         setOrders(ordersData || []);
+        setFinalizedDates(finalizedDatesData || {});
         setPendingInvoices(
           (invoicesData || []).map((i) => ({
             contract: i.contract,
@@ -567,15 +570,19 @@ export default function DashboardPage() {
               // As O.S. já pagas somem do quadro para não poluir o dia a
               // dia — ficam disponíveis em Relatórios (card "O.S. Pagas").
               // O.S. finalizadas há mais de 3 dias também saem do quadro
-              // pelo mesmo motivo — continuam existindo normalmente,
-              // consultáveis em Relatórios (card "O.S. Finalizadas").
+              // pelo mesmo motivo — usa a data real em que a O.S. virou
+              // "Finalizado" (histórico de status), não a data de abertura
+              // nem a de "última edição" (que muda por qualquer motivo).
               const threeDaysAgo = new Date();
               threeDaysAgo.setDate(threeDaysAgo.getDate() - 3);
               const items = orders.filter((o) => {
                 if (o.status !== col.status) return false;
                 if (o.paymentStatus === "paga") return false;
                 if (col.status === "finalizado") {
-                  const reference = new Date(o.updatedAt || o.createdAt);
+                  const finalizedAt = finalizedDates[o.id];
+                  // Se por algum motivo não tiver o registro no histórico
+                  // (dado antigo), usa a data de abertura como alternativa.
+                  const reference = new Date(finalizedAt || o.createdAt);
                   if (reference < threeDaysAgo) return false;
                 }
                 return true;
