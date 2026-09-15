@@ -3,7 +3,7 @@
 import { useEffect, useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { getOrders, getPendingInvoices, markInvoiceAsSent, markInvoiceAsPaid, getAppointments, getOrderFinalizedDates } from "@/services/storage";
+import { getOrders, getPendingInvoices, markInvoiceAsSent, markInvoiceAsPaid, getAppointments, setOrderHiddenFromDashboard } from "@/services/storage";
 import { OrderService, OrderStatus } from "@/types";
 import { formatCurrency, statusLabels, statusColors, priorityLabels, priorityColors, paymentStatusLabels, paymentStatusColors, toBrazilDateKey, whatsappLink } from "@/lib/utils";
 import {
@@ -27,7 +27,7 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { isSameDay, isBefore, startOfDay, addDays, format } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { toast, toastError } from "@/hooks/use-toast";
+import { toast, toastError, extractErrorMessage } from "@/hooks/use-toast";
 
 const columns: { status: OrderStatus; label: string }[] = [
   { status: "pendente", label: "Pendente" },
@@ -40,7 +40,6 @@ const columns: { status: OrderStatus; label: string }[] = [
 export default function DashboardPage() {
   const router = useRouter();
   const [orders, setOrders] = useState<OrderService[]>([]);
-  const [finalizedDates, setFinalizedDates] = useState<Record<string, string>>({});
   const [pendingInvoices, setPendingInvoices] = useState<
     {
       contract: { id: string; title: string; client: { fullName: string; phone: string }; monthlyValue: number };
@@ -76,15 +75,13 @@ export default function DashboardPage() {
         const month = currentMonth.getMonth() + 1;
         const year = currentMonth.getFullYear();
 
-        const [ordersData, invoicesData, appointmentsData, finalizedDatesData] = await Promise.all([
+        const [ordersData, invoicesData, appointmentsData] = await Promise.all([
           getOrders(),
           getPendingInvoices(month, year).catch(() => []),
           getAppointments().catch(() => []),
-          getOrderFinalizedDates().catch(() => ({})),
         ]);
 
         setOrders(ordersData || []);
-        setFinalizedDates(finalizedDatesData || {});
         setPendingInvoices(
           (invoicesData || []).map((i) => ({
             contract: i.contract,
@@ -175,6 +172,21 @@ export default function DashboardPage() {
       router.refresh();
     } catch (error) {
       toastError(error, "Não foi possível marcar o contrato como pago");
+    }
+  };
+
+  const handleHideOrder = async (e: React.MouseEvent, orderId: string) => {
+    e.preventDefault(); // não navega pra tela da O.S. ao clicar no ícone
+    e.stopPropagation();
+    // Remove da tela imediatamente (otimista); a O.S. continua existindo
+    // no banco e em Relatórios normalmente.
+    setOrders((prev) => prev.map((o) => (o.id === orderId ? { ...o, hiddenFromDashboard: true } : o)));
+    try {
+      await setOrderHiddenFromDashboard(orderId, true);
+    } catch (error) {
+      // Se der erro, desfaz a remoção visual.
+      setOrders((prev) => prev.map((o) => (o.id === orderId ? { ...o, hiddenFromDashboard: false } : o)));
+      alert(extractErrorMessage(error));
     }
   };
 
@@ -569,22 +581,13 @@ export default function DashboardPage() {
             {columns.map((col) => {
               // As O.S. já pagas somem do quadro para não poluir o dia a
               // dia — ficam disponíveis em Relatórios (card "O.S. Pagas").
-              // O.S. finalizadas há mais de 3 dias também saem do quadro
-              // pelo mesmo motivo — usa a data real em que a O.S. virou
-              // "Finalizado" (histórico de status), não a data de abertura
-              // nem a de "última edição" (que muda por qualquer motivo).
-              const threeDaysAgo = new Date();
-              threeDaysAgo.setDate(threeDaysAgo.getDate() - 3);
+              // O.S. marcadas manualmente como "ocultas" (botão no card)
+              // também saem do quadro — não são excluídas, só escondidas
+              // do dia a dia; continuam 100% visíveis em Relatórios.
               const items = orders.filter((o) => {
                 if (o.status !== col.status) return false;
                 if (o.paymentStatus === "paga") return false;
-                if (col.status === "finalizado") {
-                  const finalizedAt = finalizedDates[o.id];
-                  // Se por algum motivo não tiver o registro no histórico
-                  // (dado antigo), usa a data de abertura como alternativa.
-                  const reference = new Date(finalizedAt || o.createdAt);
-                  if (reference < threeDaysAgo) return false;
-                }
+                if (o.hiddenFromDashboard) return false;
                 return true;
               });
               const visibleCount = expandedColumns[col.status] || kanbanPageSize;
@@ -599,10 +602,21 @@ export default function DashboardPage() {
                   <div className="space-y-3">
                     {visibleItems.map((order) => (
                       <Link key={order.id} href={`/painel/os/${order.id}`}>
-                        <div className="bg-graphite-950 border border-graphite-800 rounded-xl p-3 hover:border-emerald-450/40 transition group">
+                        <div className="bg-graphite-950 border border-graphite-800 rounded-xl p-3 hover:border-emerald-450/40 transition group relative">
                           <div className="flex items-center justify-between mb-2">
                             <span className="text-xs font-semibold text-emerald-450">#{order.number}</span>
-                            <ArrowRight className="w-4 h-4 text-graphite-500 group-hover:text-emerald-450 transition" />
+                            <div className="flex items-center gap-1.5">
+                              {col.status === "finalizado" && (
+                                <button
+                                  onClick={(e) => handleHideOrder(e, order.id)}
+                                  title="Ocultar do Dashboard (continua em Relatórios)"
+                                  className="text-graphite-500 hover:text-graphite-300 p-0.5 opacity-0 group-hover:opacity-100 transition"
+                                >
+                                  <EyeOff className="w-3.5 h-3.5" />
+                                </button>
+                              )}
+                              <ArrowRight className="w-4 h-4 text-graphite-500 group-hover:text-emerald-450 transition" />
+                            </div>
                           </div>
                           <p className="font-medium text-sm truncate">{order.client.fullName}</p>
                           <p className="text-xs text-graphite-400 truncate">{order.client.phone}</p>

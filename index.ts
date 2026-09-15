@@ -39,6 +39,7 @@ export interface OrderService {
   media: MediaFile[];
   createdAt: string;
   updatedAt?: string;
+  hiddenFromDashboard?: boolean;
   budgetItems?: BudgetItem[];
   budgetStatus?: BudgetStatus;
   budgetApprovedAt?: string;

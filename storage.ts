@@ -48,6 +48,7 @@ type DbOrder = {
   assigned_technician_id: string | null;
   created_at: string;
   updated_at: string | null;
+  hidden_from_dashboard: boolean | null;
   clients: DbClient | null;
   order_media: { id: string; url: string; type: "image" | "video"; name: string }[] | null;
   budget_items: DbBudgetItem[] | null;
@@ -175,6 +176,7 @@ function mapOrder(row: DbOrder): OrderService {
     })),
     createdAt: row.created_at,
     updatedAt: row.updated_at || undefined,
+    hiddenFromDashboard: row.hidden_from_dashboard || false,
     budgetItems: (row.budget_items || []).map(mapBudgetItem),
     budgetStatus: row.budget_status || "pendente",
     budgetApprovedAt: row.budget_approved_at || undefined,
@@ -424,6 +426,13 @@ export async function getOrderFinalizedDates(): Promise<Record<string, string>> 
     if (!map[row.order_id]) map[row.order_id] = row.created_at;
   });
   return map;
+}
+
+// Oculta/mostra manualmente uma O.S. no quadro do Dashboard — não afeta
+// Relatórios nem exclui nada, é só uma preferência de exibição.
+export async function setOrderHiddenFromDashboard(id: string, hidden: boolean): Promise<void> {
+  const { error } = await supabase.from("orders").update({ hidden_from_dashboard: hidden }).eq("id", id);
+  if (error) throw error;
 }
 
 export async function getOrders(): Promise<OrderService[]> {
