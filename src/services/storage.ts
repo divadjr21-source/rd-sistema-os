@@ -288,9 +288,6 @@ export async function getClients(): Promise<Client[]> {
   return (data || []).map(mapClient);
 }
 
-// Versão paginada, usada na tela de listagem (evita carregar todos os
-// clientes de uma vez quando a base crescer). Busca no servidor por nome
-// ou telefone quando `search` é informado.
 export async function getClientsPaginated(params: {
   page: number;
   pageSize: number;
@@ -409,9 +406,6 @@ export async function deleteCatalogItem(id: string): Promise<void> {
 
 // --- Orders ---
 
-// Data exata em que cada O.S. virou "Finalizado" pela última vez — usa o
-// histórico de mudança de status (mais confiável que "última edição",
-// que muda por qualquer motivo, não só ao finalizar).
 export async function getOrderFinalizedDates(): Promise<Record<string, string>> {
   const { data, error } = await supabase
     .from("order_status_history")
@@ -426,8 +420,6 @@ export async function getOrderFinalizedDates(): Promise<Record<string, string>> 
   return map;
 }
 
-// Oculta/mostra manualmente uma O.S. no quadro do Dashboard — não afeta
-// Relatórios nem exclui nada, é só uma preferência de exibição.
 export async function setOrderHiddenFromDashboard(id: string, hidden: boolean): Promise<void> {
   const { error } = await supabase.from("orders").update({ hidden_from_dashboard: hidden }).eq("id", id);
   if (error) throw error;
@@ -449,9 +441,6 @@ export async function getOrders(): Promise<OrderService[]> {
   return (data || []).map(mapOrder);
 }
 
-// Versão paginada, usada na tela de listagem de O.S. (evita carregar
-// centenas de registros de uma vez quando a base crescer). Busca no
-// servidor por número da O.S., nome do cliente ou telefone.
 export async function getOrdersPaginated(params: {
   page: number;
   pageSize: number;
@@ -655,9 +644,6 @@ export async function createOrderManual(data: {
       status: data.status,
       budget_status: "pendente",
       priority: data.priority || "media",
-      // Atribui automaticamente a quem está criando, senão um técnico
-      // perderia de vista a própria O.S. assim que criasse (as regras de
-      // segurança só mostram a ele o que está atribuído a ele).
       assigned_technician_id: user?.id || null,
     })
     .select(
@@ -982,9 +968,10 @@ export async function deleteContract(id: string): Promise<void> {
 
 // --- Contract Invoices ---
 
-export async function getPendingInvoices(month: number, year: number): Promise
-  { contract: Contract; invoice: ContractInvoice | null }[]
-> {
+export async function getPendingInvoices(
+  month: number,
+  year: number
+): Promise<{ contract: Contract; invoice: ContractInvoice | null }[]> {
   const { data: contracts, error } = await supabase
     .from("contracts")
     .select("*, clients(*)")
@@ -1168,6 +1155,21 @@ export async function updateAppointment(
   return mapAppointment(row);
 }
 
+export async function updateAppointmentStatus(
+  id: string,
+  status: AppointmentStatus
+): Promise<Appointment> {
+  const { data: row, error } = await supabase
+    .from("appointments")
+    .update({ status })
+    .eq("id", id)
+    .select("*, orders(*, clients(*), order_media(*), budget_items(*)), clients(*)")
+    .single();
+
+  if (error) throw error;
+  return mapAppointment(row);
+}
+
 export async function deleteAppointment(id: string): Promise<void> {
   const { error } = await supabase.from("appointments").delete().eq("id", id);
   if (error) throw error;
@@ -1260,14 +1262,12 @@ export async function getCostProjects(): Promise<CostProject[]> {
 export async function getCostProjectById(id: string): Promise<CostProject | undefined> {
   const { data, error } = await supabase.from("cost_projects").select(COST_PROJECT_SELECT).eq("id", id).single();
   if (error) {
-    if (error.code === "PGRST116") return undefined; // not found
+    if (error.code === "PGRST116") return undefined;
     throw error;
   }
   return mapCostProject(data);
 }
 
-// Ordens de Serviço que ainda NÃO têm um Projeto de Custos vinculado
-// (usado na busca ao criar um projeto novo).
 export async function getOrdersWithoutCostProject(): Promise<OrderService[]> {
   const [allOrders, { data: linked, error }] = await Promise.all([
     getOrders(),
@@ -1439,7 +1439,6 @@ export async function getTechnicalReportById(id: string): Promise<TechnicalRepor
   return data ? mapTechnicalReport(data) : undefined;
 }
 
-// Usada pela página pública (sem login) de visualização do relatório.
 export async function getPublicTechnicalReport(id: string): Promise<TechnicalReport | undefined> {
   const { data, error } = await supabase
     .from("technical_reports")
