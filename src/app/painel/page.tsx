@@ -3,7 +3,14 @@
 import { useEffect, useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { getOrders, getPendingInvoices, markInvoiceAsSent, markInvoiceAsPaid, getAppointments } from "@/services/storage";
+import {
+  getOrders,
+  getPendingInvoices,
+  markInvoiceAsSent,
+  markInvoiceAsPaid,
+  getAppointments,
+  toggleHideOrderFromDashboard,
+} from "@/services/storage";
 import { OrderService, OrderStatus } from "@/types";
 import { formatCurrency, statusLabels, statusColors, priorityLabels, priorityColors, paymentStatusLabels, paymentStatusColors, toBrazilDateKey, whatsappLink } from "@/lib/utils";
 import {
@@ -52,8 +59,6 @@ export default function DashboardPage() {
   const [loadError, setLoadError] = useState(false);
   const [currentMonth] = useState(new Date());
   const [hideValues, setHideValues] = useState(false);
-  // Quantos cards mostrar por coluna do quadro de O.S. antes de precisar
-  // clicar em "Ver mais" — evita uma coluna gigante quando tiver muita O.S.
   const kanbanPageSize = 5;
   const [expandedColumns, setExpandedColumns] = useState<Record<string, number>>({});
 
@@ -150,9 +155,6 @@ export default function DashboardPage() {
     }
   };
 
-  // Marca o campo simples de pagamento do contrato (o mesmo que aparece
-  // no card, na tela de Contratos) como "Paga", tirando-o imediatamente
-  // da lista de Cobranças Pendentes.
   const handleMarkContractPaid = async (contractId: string) => {
     const month = currentMonth.getMonth() + 1;
     const year = currentMonth.getFullYear();
@@ -181,8 +183,6 @@ export default function DashboardPage() {
 
   const currentDay = today.getDate();
 
-  // Aparece se falta enviar a NF OU falta confirmar o pagamento (qualquer
-  // uma das duas pendências mantém o alerta visível).
   const vencendoHoje = pendingInvoices.filter(
     (p) => (!p.invoice?.sentAt || !p.invoice?.paidAt) && p.nfIssueDay === currentDay
   );
@@ -196,7 +196,6 @@ export default function DashboardPage() {
     return p.nfIssueDay < currentDay;
   });
 
-  // O.S. finalizadas mas ainda não pagas — lembrete pra cobrar o cliente.
   const cobrancasPendentesOS = orders
     .filter((o) => o.status === "finalizado" && o.paymentStatus === "aguardando")
     .map((o) => {
@@ -204,10 +203,6 @@ export default function DashboardPage() {
       return { type: "os" as const, id: o.id, order: o, total };
     });
 
-  // Contratos ainda não pagos neste mês (fonte única: contract_invoices,
-  // a mesma usada nos Alertas de Notas Fiscais). Não precisa de data de
-  // vencimento — aparece sempre que o mês atual ainda não foi confirmado
-  // como pago, e some sozinho assim que o mês vira (nova linha em branco).
   const cobrancasPendentesContratos = pendingInvoices
     .filter((p) => !p.invoice?.paidAt)
     .map((p) => ({ type: "contrato" as const, id: p.contract.id, contract: p.contract }));
@@ -564,16 +559,12 @@ export default function DashboardPage() {
         <div className="overflow-x-auto pb-2 scrollbar-thin">
           <div className="flex gap-4 min-w-[900px]">
             {columns.map((col) => {
-              // As O.S. já pagas somem do quadro para não poluir o dia a
-              // dia — ficam disponíveis em Relatórios (card "O.S. Pagas").
-              // O.S. finalizadas há mais de 3 dias também saem do quadro
-              // pelo mesmo motivo — continuam existindo normalmente,
-              // consultáveis em Relatórios (card "O.S. Finalizadas").
               const threeDaysAgo = new Date();
               threeDaysAgo.setDate(threeDaysAgo.getDate() - 3);
               const items = orders.filter((o) => {
                 if (o.status !== col.status) return false;
                 if (o.paymentStatus === "paga") return false;
+                if (o.hiddenFromDashboard) return false;
                 if (col.status === "finalizado") {
                   const reference = new Date(o.updatedAt || o.createdAt);
                   if (reference < threeDaysAgo) return false;
@@ -591,12 +582,45 @@ export default function DashboardPage() {
                   </div>
                   <div className="space-y-3">
                     {visibleItems.map((order) => (
-                      <Link key={order.id} href={`/painel/os/${order.id}`}>
-                        <div className="bg-graphite-950 border border-graphite-800 rounded-xl p-3 hover:border-emerald-450/40 transition group">
-                          <div className="flex items-center justify-between mb-2">
-                            <span className="text-xs font-semibold text-emerald-450">#{order.number}</span>
-                            <ArrowRight className="w-4 h-4 text-graphite-500 group-hover:text-emerald-450 transition" />
+                      <div
+                        key={order.id}
+                        className="bg-graphite-950 border border-graphite-800 rounded-xl p-3 hover:border-emerald-450/40 transition group relative"
+                      >
+                        <div className="flex items-center justify-between mb-2">
+                          <Link href={`/painel/os/${order.id}`} className="text-xs font-semibold text-emerald-450 hover:underline">
+                            #{order.number}
+                          </Link>
+                          <div className="flex items-center gap-1">
+                            <button
+                              type="button"
+                              onClick={async (e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                if (confirm(`Deseja ocultar a O.S. #${order.number} do painel?`)) {
+                                  try {
+                                    await toggleHideOrderFromDashboard(order.id, true);
+                                    setOrders((prev) =>
+                                      prev.map((item) =>
+                                        item.id === order.id ? { ...item, hiddenFromDashboard: true } : item
+                                      )
+                                    );
+                                    toast({ title: "O.S. ocultada do painel", variant: "success" });
+                                  } catch (err) {
+                                    toastError(err, "Erro ao ocultar O.S.");
+                                  }
+                                }
+                              }}
+                              className="text-graphite-500 hover:text-red-400 p-1 transition-colors rounded"
+                              title="Ocultar do Painel"
+                            >
+                              <EyeOff className="w-3.5 h-3.5" />
+                            </button>
+                            <Link href={`/painel/os/${order.id}`}>
+                              <ArrowRight className="w-4 h-4 text-graphite-500 group-hover:text-emerald-450 transition" />
+                            </Link>
                           </div>
+                        </div>
+                        <Link href={`/painel/os/${order.id}`}>
                           <p className="font-medium text-sm truncate">{order.client.fullName}</p>
                           <p className="text-xs text-graphite-400 truncate">{order.client.phone}</p>
                           <p className="text-xs text-graphite-500 mt-1 line-clamp-2">{order.description}</p>
@@ -626,8 +650,8 @@ export default function DashboardPage() {
                               {paymentStatusLabels[order.paymentStatus]}
                             </span>
                           </div>
-                        </div>
-                      </Link>
+                        </Link>
+                      </div>
                     ))}
                     {items.length === 0 && (
                       <div className="text-center py-6 text-graphite-500 text-sm">Nenhuma O.S.</div>
