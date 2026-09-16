@@ -1520,3 +1520,14 @@ export async function deleteReportPhoto(id: string): Promise<void> {
   const { error } = await supabase.from("technical_report_photos").delete().eq("id", id);
   if (error) throw error;
 }
+export async function toggleHideOrderFromDashboard(orderId: string, hidden: boolean) {
+  const { error } = await supabase
+    .from("orders") // ou o nome da sua tabela no Supabase
+    .update({ hiddenFromDashboard: hidden })
+    .eq("id", orderId);
+
+  if (error) {
+    console.error("Erro ao ocultar O.S.:", error);
+    throw error;
+  }
+}
