@@ -3,14 +3,7 @@
 import { useEffect, useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import {
-  getOrders,
-  getPendingInvoices,
-  markInvoiceAsSent,
-  markInvoiceAsPaid,
-  getAppointments,
-  toggleHideOrderFromDashboard,
-} from "@/services/storage";
+import { getOrders, getPendingInvoices, markInvoiceAsSent, markInvoiceAsPaid, getAppointments, setOrderHiddenFromDashboard } from "@/services/storage";
 import { OrderService, OrderStatus } from "@/types";
 import { formatCurrency, statusLabels, statusColors, priorityLabels, priorityColors, paymentStatusLabels, paymentStatusColors, toBrazilDateKey, whatsappLink } from "@/lib/utils";
 import {
@@ -34,7 +27,7 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { isSameDay, isBefore, startOfDay, addDays, format } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { toast, toastError } from "@/hooks/use-toast";
+import { toast, toastError, extractErrorMessage } from "@/hooks/use-toast";
 
 const columns: { status: OrderStatus; label: string }[] = [
   { status: "pendente", label: "Pendente" },
@@ -47,7 +40,7 @@ const columns: { status: OrderStatus; label: string }[] = [
 export default function DashboardPage() {
   const router = useRouter();
   const [orders, setOrders] = useState<OrderService[]>([]);
-  const [pendingInvoices, setPendingInvoices] = useState<
+  const [pendingInvoices, setPendingInvoices] = useState
     {
       contract: { id: string; title: string; client: { fullName: string; phone: string }; monthlyValue: number };
       invoice: { sentAt?: string; paidAt?: string } | null;
@@ -59,6 +52,8 @@ export default function DashboardPage() {
   const [loadError, setLoadError] = useState(false);
   const [currentMonth] = useState(new Date());
   const [hideValues, setHideValues] = useState(false);
+  // Quantos cards mostrar por coluna do quadro de O.S. antes de precisar
+  // clicar em "Ver mais" — evita uma coluna gigante quando tiver muita O.S.
   const kanbanPageSize = 5;
   const [expandedColumns, setExpandedColumns] = useState<Record<string, number>>({});
 
@@ -155,6 +150,9 @@ export default function DashboardPage() {
     }
   };
 
+  // Marca o campo simples de pagamento do contrato (o mesmo que aparece
+  // no card, na tela de Contratos) como "Paga", tirando-o imediatamente
+  // da lista de Cobranças Pendentes.
   const handleMarkContractPaid = async (contractId: string) => {
     const month = currentMonth.getMonth() + 1;
     const year = currentMonth.getFullYear();
@@ -177,12 +175,29 @@ export default function DashboardPage() {
     }
   };
 
+  const handleHideOrder = async (e: React.MouseEvent, orderId: string) => {
+    e.preventDefault(); // não navega pra tela da O.S. ao clicar no ícone
+    e.stopPropagation();
+    // Remove da tela imediatamente (otimista); a O.S. continua existindo
+    // no banco e em Relatórios normalmente.
+    setOrders((prev) => prev.map((o) => (o.id === orderId ? { ...o, hiddenFromDashboard: true } : o)));
+    try {
+      await setOrderHiddenFromDashboard(orderId, true);
+    } catch (error) {
+      // Se der erro, desfaz a remoção visual.
+      setOrders((prev) => prev.map((o) => (o.id === orderId ? { ...o, hiddenFromDashboard: false } : o)));
+      alert(extractErrorMessage(error));
+    }
+  };
+
   const today = new Date();
   const todayStr = format(today, "yyyy-MM-dd");
   const todayCount = orders.filter((o) => o.createdAt.slice(0, 10) === todayStr).length;
 
   const currentDay = today.getDate();
 
+  // Aparece se falta enviar a NF OU falta confirmar o pagamento (qualquer
+  // uma das duas pendências mantém o alerta visível).
   const vencendoHoje = pendingInvoices.filter(
     (p) => (!p.invoice?.sentAt || !p.invoice?.paidAt) && p.nfIssueDay === currentDay
   );
@@ -196,6 +211,7 @@ export default function DashboardPage() {
     return p.nfIssueDay < currentDay;
   });
 
+  // O.S. finalizadas mas ainda não pagas — lembrete pra cobrar o cliente.
   const cobrancasPendentesOS = orders
     .filter((o) => o.status === "finalizado" && o.paymentStatus === "aguardando")
     .map((o) => {
@@ -203,6 +219,10 @@ export default function DashboardPage() {
       return { type: "os" as const, id: o.id, order: o, total };
     });
 
+  // Contratos ainda não pagos neste mês (fonte única: contract_invoices,
+  // a mesma usada nos Alertas de Notas Fiscais). Não precisa de data de
+  // vencimento — aparece sempre que o mês atual ainda não foi confirmado
+  // como pago, e some sozinho assim que o mês vira (nova linha em branco).
   const cobrancasPendentesContratos = pendingInvoices
     .filter((p) => !p.invoice?.paidAt)
     .map((p) => ({ type: "contrato" as const, id: p.contract.id, contract: p.contract }));
@@ -377,7 +397,7 @@ export default function DashboardPage() {
                     </Link>
                     <div className="flex items-center gap-3 flex-shrink-0">
                       <span className="text-sm font-semibold text-danger">{hideValues ? "R$ ••••••" : formatCurrency(total)}</span>
-                      <a
+                      
                         href={whatsappLink(
                           order.client.phone,
                           `Olá ${order.client.fullName}! Passando para lembrar sobre o pagamento pendente da O.S. nº ${order.number} (${formatCurrency(total)}). Qualquer dúvida, estou à disposição!`
@@ -408,7 +428,7 @@ export default function DashboardPage() {
                   </Link>
                   <div className="flex items-center gap-3 flex-shrink-0">
                     <span className="text-sm font-semibold text-danger">{hideValues ? "R$ ••••••" : formatCurrency(contract.monthlyValue)}</span>
-                    <a
+                    
                       href={whatsappLink(
                         contract.client.phone,
                         `Olá ${contract.client.fullName}! Passando para lembrar sobre o pagamento pendente do contrato "${contract.title}" (${formatCurrency(contract.monthlyValue)}). Qualquer dúvida, estou à disposição!`
@@ -559,16 +579,15 @@ export default function DashboardPage() {
         <div className="overflow-x-auto pb-2 scrollbar-thin">
           <div className="flex gap-4 min-w-[900px]">
             {columns.map((col) => {
-              const threeDaysAgo = new Date();
-              threeDaysAgo.setDate(threeDaysAgo.getDate() - 3);
+              // As O.S. já pagas somem do quadro para não poluir o dia a
+              // dia — ficam disponíveis em Relatórios (card "O.S. Pagas").
+              // O.S. marcadas manualmente como "ocultas" (botão no card)
+              // também saem do quadro — não são excluídas, só escondidas
+              // do dia a dia; continuam 100% visíveis em Relatórios.
               const items = orders.filter((o) => {
                 if (o.status !== col.status) return false;
                 if (o.paymentStatus === "paga") return false;
                 if (o.hiddenFromDashboard) return false;
-                if (col.status === "finalizado") {
-                  const reference = new Date(o.updatedAt || o.createdAt);
-                  if (reference < threeDaysAgo) return false;
-                }
                 return true;
               });
               const visibleCount = expandedColumns[col.status] || kanbanPageSize;
@@ -582,45 +601,23 @@ export default function DashboardPage() {
                   </div>
                   <div className="space-y-3">
                     {visibleItems.map((order) => (
-                      <div
-                        key={order.id}
-                        className="bg-graphite-950 border border-graphite-800 rounded-xl p-3 hover:border-emerald-450/40 transition group relative"
-                      >
-                        <div className="flex items-center justify-between mb-2">
-                          <Link href={`/painel/os/${order.id}`} className="text-xs font-semibold text-emerald-450 hover:underline">
-                            #{order.number}
-                          </Link>
-                          <div className="flex items-center gap-1">
-                            <button
-                              type="button"
-                              onClick={async (e) => {
-                                e.preventDefault();
-                                e.stopPropagation();
-                                if (confirm(`Deseja ocultar a O.S. #${order.number} do painel?`)) {
-                                  try {
-                                    await toggleHideOrderFromDashboard(order.id, true);
-                                    setOrders((prev) =>
-                                      prev.map((item) =>
-                                        item.id === order.id ? { ...item, hiddenFromDashboard: true } : item
-                                      )
-                                    );
-                                    toast({ title: "O.S. ocultada do painel", variant: "success" });
-                                  } catch (err) {
-                                    toastError(err, "Erro ao ocultar O.S.");
-                                  }
-                                }
-                              }}
-                              className="text-graphite-500 hover:text-red-400 p-1 transition-colors rounded"
-                              title="Ocultar do Painel"
-                            >
-                              <EyeOff className="w-3.5 h-3.5" />
-                            </button>
-                            <Link href={`/painel/os/${order.id}`}>
+                      <Link key={order.id} href={`/painel/os/${order.id}`}>
+                        <div className="bg-graphite-950 border border-graphite-800 rounded-xl p-3 hover:border-emerald-450/40 transition group relative">
+                          <div className="flex items-center justify-between mb-2">
+                            <span className="text-xs font-semibold text-emerald-450">#{order.number}</span>
+                            <div className="flex items-center gap-1.5">
+                              {col.status === "finalizado" && (
+                                <button
+                                  onClick={(e) => handleHideOrder(e, order.id)}
+                                  title="Ocultar do Dashboard (continua em Relatórios)"
+                                  className="text-graphite-500 hover:text-graphite-300 p-0.5 opacity-0 group-hover:opacity-100 transition"
+                                >
+                                  <EyeOff className="w-3.5 h-3.5" />
+                                </button>
+                              )}
                               <ArrowRight className="w-4 h-4 text-graphite-500 group-hover:text-emerald-450 transition" />
-                            </Link>
+                            </div>
                           </div>
-                        </div>
-                        <Link href={`/painel/os/${order.id}`}>
                           <p className="font-medium text-sm truncate">{order.client.fullName}</p>
                           <p className="text-xs text-graphite-400 truncate">{order.client.phone}</p>
                           <p className="text-xs text-graphite-500 mt-1 line-clamp-2">{order.description}</p>
@@ -650,8 +647,8 @@ export default function DashboardPage() {
                               {paymentStatusLabels[order.paymentStatus]}
                             </span>
                           </div>
-                        </Link>
-                      </div>
+                        </div>
+                      </Link>
                     ))}
                     {items.length === 0 && (
                       <div className="text-center py-6 text-graphite-500 text-sm">Nenhuma O.S.</div>
