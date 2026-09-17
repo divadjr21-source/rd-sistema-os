@@ -50,6 +50,10 @@ export default function DashboardPage() {
   // clicar em "Ver mais" — evita uma coluna gigante quando tiver muita O.S.
   const kanbanPageSize = 5;
   const [expandedColumns, setExpandedColumns] = useState<Record<string, number>>({});
+  // Mesmo padrão "Ver mais" aplicado na lista de Cobranças Pendentes,
+  // que também pode crescer bastante.
+  const cobrancasPageSize = 5;
+  const [visibleCobrancas, setVisibleCobrancas] = useState(cobrancasPageSize);
 
   useEffect(() => {
     setHideValues(localStorage.getItem("rd_hide_revenue") === "1");
@@ -375,7 +379,7 @@ export default function DashboardPage() {
             O.S. finalizadas e contratos mensais com pagamento pendente — entre em contato com o cliente.
           </p>
           <div className="space-y-2">
-            {cobrancasPendentes.map((item) => {
+            {cobrancasPendentes.slice(0, visibleCobrancas).map((item) => {
               if (item.type === "os") {
                 const { order, total } = item;
                 return (
@@ -446,6 +450,23 @@ export default function DashboardPage() {
               );
             })}
           </div>
+          {cobrancasPendentes.length > visibleCobrancas && (
+            <button
+              onClick={() => setVisibleCobrancas((v) => v + 10)}
+              className="w-full text-center text-xs text-emerald-450 hover:underline py-2 mt-2"
+            >
+              Ver mais ({cobrancasPendentes.length - visibleCobrancas} restante
+              {cobrancasPendentes.length - visibleCobrancas > 1 ? "s" : ""})
+            </button>
+          )}
+          {visibleCobrancas > cobrancasPageSize && cobrancasPendentes.length <= visibleCobrancas && (
+            <button
+              onClick={() => setVisibleCobrancas(cobrancasPageSize)}
+              className="w-full text-center text-xs text-graphite-500 hover:underline py-2 mt-2"
+            >
+              Ver menos
+            </button>
+          )}
         </div>
       )}
 
