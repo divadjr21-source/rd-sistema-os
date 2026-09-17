@@ -40,13 +40,7 @@ const columns: { status: OrderStatus; label: string }[] = [
 export default function DashboardPage() {
   const router = useRouter();
   const [orders, setOrders] = useState<OrderService[]>([]);
-  const [pendingInvoices, setPendingInvoices] = useState
-    {
-      contract: { id: string; title: string; client: { fullName: string; phone: string }; monthlyValue: number };
-      invoice: { sentAt?: string; paidAt?: string } | null;
-      nfIssueDay: number;
-    }[]
-  >([]);
+  const [pendingInvoices, setPendingInvoices] = useState<{ contract: { id: string; title: string; client: { fullName: string; phone: string }; monthlyValue: number }; invoice: { sentAt?: string; paidAt?: string } | null; nfIssueDay: number }[]>([]);
   const [appointments, setAppointments] = useState<{ id: string; title: string; scheduledAt: string; client?: { fullName: string } }[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
@@ -397,7 +391,7 @@ export default function DashboardPage() {
                     </Link>
                     <div className="flex items-center gap-3 flex-shrink-0">
                       <span className="text-sm font-semibold text-danger">{hideValues ? "R$ ••••••" : formatCurrency(total)}</span>
-                      
+                      <a
                         href={whatsappLink(
                           order.client.phone,
                           `Olá ${order.client.fullName}! Passando para lembrar sobre o pagamento pendente da O.S. nº ${order.number} (${formatCurrency(total)}). Qualquer dúvida, estou à disposição!`
@@ -428,7 +422,7 @@ export default function DashboardPage() {
                   </Link>
                   <div className="flex items-center gap-3 flex-shrink-0">
                     <span className="text-sm font-semibold text-danger">{hideValues ? "R$ ••••••" : formatCurrency(contract.monthlyValue)}</span>
-                    
+                    <a
                       href={whatsappLink(
                         contract.client.phone,
                         `Olá ${contract.client.fullName}! Passando para lembrar sobre o pagamento pendente do contrato "${contract.title}" (${formatCurrency(contract.monthlyValue)}). Qualquer dúvida, estou à disposição!`
