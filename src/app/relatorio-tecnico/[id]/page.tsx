@@ -103,14 +103,14 @@ export default function PublicTechnicalReportPage() {
               <h4 className="text-sm font-semibold mb-2 text-graphite-300 print:text-black">
                 Registro Fotográfico
               </h4>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="flex flex-wrap gap-3">
                 {report.photos.map((photo) => (
-                  <div key={photo.id} className="print:break-inside-avoid">
+                  <div key={photo.id} className="w-40 sm:w-48 print:w-32 print:break-inside-avoid">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img
                       src={photo.url}
                       alt={photo.caption || "Foto do atendimento"}
-                      className="w-full h-40 object-cover rounded-lg border border-graphite-800 print:border-gray-300"
+                      className="w-full h-40 print:h-28 object-cover rounded-lg border border-graphite-800 print:border-gray-300"
                     />
                     {photo.caption && (
                       <p className="text-xs text-graphite-400 print:text-gray-600 text-center mt-1">
