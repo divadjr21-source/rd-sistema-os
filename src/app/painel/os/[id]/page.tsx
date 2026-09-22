@@ -316,10 +316,14 @@ export default function OrderDetailPage() {
       y += 6;
       doc.text(`Endereço: ${order.client.address}`, marginX, y);
       y += 6;
-      doc.text(`Descrição do problema: ${order.description}`, marginX, y, {
-        maxWidth: pageWidth - marginX * 2,
-      });
-      y += 12;
+      // Calcula quantas linhas o texto realmente ocupa, pra empurrar o
+      // restante do PDF na altura certa — antes usava um valor fixo, o
+      // que causava sobreposição quando a descrição era mais longa.
+      doc.setFontSize(10);
+      const descLabel = `Descrição do problema: ${order.description || "-"}`;
+      const descLines: string[] = doc.splitTextToSize(descLabel, pageWidth - marginX * 2);
+      doc.text(descLines, marginX, y);
+      y += descLines.length * 5 + 6;
 
       const items = order.budgetItems || [];
       const products = items.filter((i) => i.type === "material");
@@ -386,6 +390,38 @@ export default function OrderDetailPage() {
       doc.text("TOTAL GERAL", marginX + 4, y + 8);
       doc.text(formatCurrency(total), pageWidth - marginX - 4, y + 8, { align: "right" });
       y += 22;
+
+      // --- Observações e Validade do Orçamento (campos próprios, numa
+      // linha independente — não fazem mais parte da Descrição do
+      // Problema) ---
+      if (order.budgetValidity || order.budgetNotes) {
+        if (y > 250) {
+          doc.addPage();
+          y = 20;
+        }
+        if (order.budgetValidity) {
+          doc.setFont("helvetica", "bold");
+          doc.setFontSize(10);
+          doc.text(`Validade do Orçamento: `, marginX, y);
+          doc.setFont("helvetica", "normal");
+          const validityWidth = doc.getTextWidth("Validade do Orçamento: ");
+          doc.text(order.budgetValidity, marginX + validityWidth, y);
+          y += 7;
+        }
+        if (order.budgetNotes) {
+          doc.setFont("helvetica", "bold");
+          doc.setFontSize(10);
+          doc.text("Observações", marginX, y);
+          y += 5;
+          doc.setFont("helvetica", "normal");
+          doc.setFontSize(9);
+          const notesLines: string[] = doc.splitTextToSize(order.budgetNotes, pageWidth - marginX * 2);
+          doc.text(notesLines, marginX, y);
+          y += notesLines.length * 4.5 + 6;
+        } else {
+          y += 4;
+        }
+      }
 
       // --- Termos e condições ---
       if (y > 240) {
