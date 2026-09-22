@@ -98,8 +98,8 @@ export default function BudgetModal({
         fullName: editingOrder.client.fullName,
         phone: editingOrder.client.phone,
         address: editingOrder.client.address,
-        observacoes: "",
-        validade: "",
+        observacoes: editingOrder.budgetNotes || "",
+        validade: editingOrder.budgetValidity || "",
         status: editingOrder.budgetStatus || "pendente",
         items: (editingOrder.budgetItems || []).map((b) => ({
           id: b.id,
