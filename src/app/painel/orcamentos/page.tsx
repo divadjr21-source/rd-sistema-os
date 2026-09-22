@@ -11,6 +11,7 @@ import {
   createOrderManual,
   setBudgetItems,
   updateOrderBudgetStatus,
+  updateOrderBudgetNotes,
   deleteOrder,
 } from "@/services/storage";
 import { OrderService, Client, CatalogItem, BudgetItem, BudgetStatus } from "@/types";
@@ -135,14 +136,13 @@ export default function OrcamentosPage() {
         if (!targetOrder) return;
         await setBudgetItems(targetOrder.id, data.items);
         await updateOrderBudgetStatus(targetOrder.id, data.status);
-        const description = buildDescription(targetOrder.description, data.notes, data.validity);
-        if (description !== targetOrder.description) {
-          await updateOrderDescription(targetOrder.id, description);
-        }
+        // Observações e Validade ficam em campos próprios — não mexem
+        // mais na Descrição do Problema da O.S.
+        await updateOrderBudgetNotes(targetOrder.id, data.notes, data.validity);
       } else {
         const newOrder = await createOrderManual({
           client: clientData,
-          description: buildDescription("", data.notes, data.validity),
+          description: "",
           status:
             data.status === "aprovado"
               ? "em_execucao"
@@ -153,6 +153,7 @@ export default function OrcamentosPage() {
         });
         await setBudgetItems(newOrder.id, data.items);
         await updateOrderBudgetStatus(newOrder.id, data.status);
+        await updateOrderBudgetNotes(newOrder.id, data.notes, data.validity);
       }
 
       await refresh();
@@ -184,10 +185,9 @@ export default function OrcamentosPage() {
       await setBudgetItems(editingOrder.id, data.items);
       await updateOrderBudgetStatus(editingOrder.id, data.status);
 
-      const description = buildDescription(editingOrder.description, data.notes, data.validity);
-      if (description !== editingOrder.description) {
-        await updateOrderDescription(editingOrder.id, description);
-      }
+      // Observações e Validade ficam em campos próprios — não mexem mais
+      // na Descrição do Problema da O.S.
+      await updateOrderBudgetNotes(editingOrder.id, data.notes, data.validity);
 
       await refresh();
       setEditModalOpen(false);
@@ -398,17 +398,4 @@ ${link}`;
       </Dialog>
     </div>
   );
-}
-
-function buildDescription(base: string, notes: string, validity: string) {
-  return [base, notes && `Obs: ${notes}`, validity && `Validade: ${validity}`]
-    .filter(Boolean)
-    .join("\n");
-}
-
-async function updateOrderDescription(id: string, description: string) {
-  const { createClient } = await import("@/lib/supabase/client");
-  const supabase = createClient();
-  const { error } = await supabase.from("orders").update({ description }).eq("id", id);
-  if (error) throw error;
 }
