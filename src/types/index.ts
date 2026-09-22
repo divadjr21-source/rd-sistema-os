@@ -39,7 +39,9 @@ export interface OrderService {
   media: MediaFile[];
   createdAt: string;
   updatedAt?: string;
-  hiddenFromDashboard?: boolean; // <-- PROPRIEDADE ADICIONADA AQUI
+  hiddenFromDashboard?: boolean;
+  budgetNotes?: string;
+  budgetValidity?: string;
   budgetItems?: BudgetItem[];
   budgetStatus?: BudgetStatus;
   budgetApprovedAt?: string;
@@ -174,3 +176,4 @@ export interface TechnicalReport {
   createdAt: string;
   updatedAt: string;
 }
+
