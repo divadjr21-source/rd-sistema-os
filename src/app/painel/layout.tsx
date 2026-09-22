@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
 import { isAuthenticated, logout, getMyProfile, MyProfile } from "@/services/storage";
+import { createClient } from "@/lib/supabase/client";
 import {
   LayoutDashboard,
   ClipboardList,
@@ -100,6 +101,30 @@ export default function PanelLayout({
       setLoading(false);
     });
   }, [router, pathname]);
+
+  // Quando o sistema fica parado (aba minimizada, celular bloqueado, PC
+  // hibernando) por um tempo, a sessão de login pode "vencer" sem o
+  // navegador perceber a tempo. Ao voltar pra aba, força uma checagem —
+  // isso renova a sessão sozinho nos bastidores; se não conseguir
+  // renovar, manda de volta pro login de forma organizada, em vez de
+  // deixar aparecer um erro técnico solto na tela (ex: "JWT issued at
+  // future").
+  useEffect(() => {
+    const supabase = createClient();
+    const handleVisibility = async () => {
+      if (document.visibilityState !== "visible") return;
+      const { data, error } = await supabase.auth.getSession();
+      if (error || !data.session) {
+        router.replace("/login");
+      }
+    };
+    document.addEventListener("visibilitychange", handleVisibility);
+    window.addEventListener("focus", handleVisibility);
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibility);
+      window.removeEventListener("focus", handleVisibility);
+    };
+  }, [router]);
 
   const visibleNav = nav.filter((item) => !item.adminOnly || profile?.role === "admin");
 
