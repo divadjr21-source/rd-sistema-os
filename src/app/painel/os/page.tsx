@@ -93,6 +93,7 @@ export default function OrdersListPage() {
   const isAdmin = profile?.role === "admin";
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
+  const [statusFilter, setStatusFilter] = useState<OrderStatus | "todos">("todos");
   const [total, setTotal] = useState(0);
   const pageSize = 20;
   const [modalOpen, setModalOpen] = useState(false);
@@ -138,7 +139,7 @@ export default function OrdersListPage() {
   useEffect(() => {
     refresh();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [page]);
+  }, [page, statusFilter]);
 
   // Busca no servidor com um pequeno atraso (debounce) pra não disparar
   // uma consulta a cada tecla digitada.
@@ -156,12 +157,22 @@ export default function OrdersListPage() {
 
   const refresh = async () => {
     try {
-      const { data, total: t } = await getOrdersPaginated({ page, pageSize, search });
+      const { data, total: t } = await getOrdersPaginated({
+        page,
+        pageSize,
+        search,
+        status: statusFilter === "todos" ? undefined : statusFilter,
+      });
       setOrders(data);
       setTotal(t);
     } catch (error) {
       alert(extractErrorMessage(error));
     }
+  };
+
+  const handleStatusFilterClick = (value: OrderStatus | "todos") => {
+    setStatusFilter(value);
+    setPage(1);
   };
 
   const resetForm = () => {
@@ -575,6 +586,34 @@ export default function OrdersListPage() {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
+        </div>
+
+        <div className="flex flex-wrap gap-2 mb-4">
+          <button
+            onClick={() => handleStatusFilterClick("todos")}
+            className={cn(
+              "text-xs px-3 py-1.5 rounded-full border font-medium transition",
+              statusFilter === "todos"
+                ? "bg-emerald-450/15 text-emerald-450 border-emerald-450/40"
+                : "bg-graphite-950 text-graphite-400 border-graphite-800 hover:border-graphite-700"
+            )}
+          >
+            Todos
+          </button>
+          {statusOptions.map((s) => (
+            <button
+              key={s}
+              onClick={() => handleStatusFilterClick(s)}
+              className={cn(
+                "text-xs px-3 py-1.5 rounded-full border font-medium transition",
+                statusFilter === s
+                  ? "bg-emerald-450/15 text-emerald-450 border-emerald-450/40"
+                  : "bg-graphite-950 text-graphite-400 border-graphite-800 hover:border-graphite-700"
+              )}
+            >
+              {statusLabels[s]}
+            </button>
+          ))}
         </div>
 
         <div className="overflow-x-auto">
