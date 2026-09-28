@@ -473,7 +473,7 @@ export async function getOrdersPaginated(params: {
     .select(
       `
       *,
-      clients!inner(*),
+      clients(*),
       order_media(*),
       budget_items(*)
     `,
@@ -487,9 +487,26 @@ export async function getOrdersPaginated(params: {
 
   if (search && search.trim()) {
     const term = search.trim();
-    query = query.or(
-      `number.ilike.%${term}%,clients.full_name.ilike.%${term}%,clients.phone.ilike.%${term.replace(/\D/g, "")}%`
-    );
+    const digits = term.replace(/\D/g, "");
+
+    // Busca primeiro os clientes cujo nome ou telefone combina com o
+    // termo, e depois filtra as O.S. só por colunas da própria tabela
+    // (número da O.S. ou o client_id encontrado) — evita o filtro
+    // combinado entre tabelas, que quebra dependendo do termo digitado.
+    const clientOrParts = [`full_name.ilike.%${term}%`];
+    if (digits) clientOrParts.push(`phone.ilike.%${digits}%`);
+    const { data: matchingClients, error: clientsError } = await supabase
+      .from("clients")
+      .select("id")
+      .or(clientOrParts.join(","));
+    if (clientsError) throw clientsError;
+
+    const clientIds = (matchingClients || []).map((c) => c.id);
+    const orderOrParts = [`number.ilike.%${term}%`];
+    if (clientIds.length > 0) {
+      orderOrParts.push(`client_id.in.(${clientIds.join(",")})`);
+    }
+    query = query.or(orderOrParts.join(","));
   }
 
   const { data, error, count } = await query.range(from, to);
