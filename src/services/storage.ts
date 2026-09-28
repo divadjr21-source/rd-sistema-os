@@ -462,8 +462,9 @@ export async function getOrdersPaginated(params: {
   page: number;
   pageSize: number;
   search?: string;
+  status?: OrderStatus;
 }): Promise<{ data: OrderService[]; total: number }> {
-  const { page, pageSize, search } = params;
+  const { page, pageSize, search, status } = params;
   const from = (page - 1) * pageSize;
   const to = from + pageSize - 1;
 
@@ -479,6 +480,10 @@ export async function getOrdersPaginated(params: {
       { count: "exact" }
     )
     .order("created_at", { ascending: false });
+
+  if (status) {
+    query = query.eq("status", status);
+  }
 
   if (search && search.trim()) {
     const term = search.trim();
