@@ -588,32 +588,21 @@ export default function OrdersListPage() {
           />
         </div>
 
-        <div className="flex flex-wrap gap-2 mb-4">
-          <button
-            onClick={() => handleStatusFilterClick("todos")}
-            className={cn(
-              "text-xs px-3 py-1.5 rounded-full border font-medium transition",
-              statusFilter === "todos"
-                ? "bg-emerald-450/15 text-emerald-450 border-emerald-450/40"
-                : "bg-graphite-950 text-graphite-400 border-graphite-800 hover:border-graphite-700"
-            )}
+        <div className="mb-4 max-w-xs">
+          <Select
+            value={statusFilter}
+            onValueChange={(v) => handleStatusFilterClick(v as OrderStatus | "todos")}
           >
-            Todos
-          </button>
-          {statusOptions.map((s) => (
-            <button
-              key={s}
-              onClick={() => handleStatusFilterClick(s)}
-              className={cn(
-                "text-xs px-3 py-1.5 rounded-full border font-medium transition",
-                statusFilter === s
-                  ? "bg-emerald-450/15 text-emerald-450 border-emerald-450/40"
-                  : "bg-graphite-950 text-graphite-400 border-graphite-800 hover:border-graphite-700"
-              )}
-            >
-              {statusLabels[s]}
-            </button>
-          ))}
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="todos">Todos os status</SelectItem>
+              {statusOptions.map((s) => (
+                <SelectItem key={s} value={s}>{statusLabels[s]}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
 
         <div className="overflow-x-auto">
